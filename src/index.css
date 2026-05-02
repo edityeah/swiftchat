@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  input, button, select, textarea {
+    font-family: 'Montserrat', sans-serif;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+}
+
+[contenteditable]:empty:before {
+  content: attr(data-placeholder);
+  color: #B8C0CC;
+  pointer-events: none;
+  display: block;
+}
+
+/* Notification bell shake — applied for ~1.2s when a new notification fires.
+   Urgent notifications loop the animation 3x via inline style. */
+@keyframes ntf-bell-buzz {
+  0%   { transform: rotate(0deg); }
+  10%  { transform: rotate(14deg); }
+  20%  { transform: rotate(-12deg); }
+  30%  { transform: rotate(10deg); }
+  40%  { transform: rotate(-8deg); }
+  50%  { transform: rotate(6deg); }
+  60%  { transform: rotate(-4deg); }
+  70%  { transform: rotate(2deg); }
+  80%  { transform: rotate(-1deg); }
+  100% { transform: rotate(0deg); }
+}
+.notification-bell--buzz {
+  animation: ntf-bell-buzz 1.2s ease-in-out;
+  transform-origin: 50% 10%;
+}
+.notification-bell--buzz-urgent {
+  animation: ntf-bell-buzz 1.2s ease-in-out 3;
+  transform-origin: 50% 10%;
+}
+/* Loops the bell shake while a reminder is unacknowledged. Cleared the
+   moment the user clicks the bell, the toast, or marks the reminder read. */
+.notification-bell--ringing {
+  animation: ntf-bell-buzz 1.2s ease-in-out infinite;
+  transform-origin: 50% 10%;
+}

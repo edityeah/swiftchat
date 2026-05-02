@@ -1,0 +1,337 @@
+[
+  {
+    "id": "attn-en-action-1",
+    "module": "Attendance",
+    "language": "en",
+    "input": "Mark attendance for class 7",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_MARK_ATTENDANCE", "entities": { "class": "7" }, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "attn-en-action-2",
+    "module": "Attendance",
+    "language": "en",
+    "input": "Show me absent students today",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "SHOW_ABSENT_STUDENTS", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "attn-hi-action-1",
+    "module": "Attendance",
+    "language": "hi",
+    "input": "Class 6 ki attendance mark karni hai",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_MARK_ATTENDANCE", "entities": { "class": "6" }, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "attn-hinglish-1",
+    "module": "Attendance",
+    "language": "hi-en",
+    "input": "Class 8 ka attendance kholo",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_MARK_ATTENDANCE", "entities": { "class": "8" }, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "attn-gu-translit-1",
+    "module": "Attendance",
+    "language": "gu-en",
+    "input": "Class 7 ni hajri lo",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_MARK_ATTENDANCE", "entities": { "class": "7" }, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "attn-gu-script-1",
+    "module": "Attendance",
+    "language": "gu",
+    "input": "હાજરી માર્ક કરો",
+    "role": "teacher",
+    "comment": "No class given → router should ask for the class via clarify chips.",
+    "expect": { "responseType": "clarify", "actionId": "OPEN_MARK_ATTENDANCE", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "attn-rag-en-1",
+    "module": "Attendance",
+    "language": "en",
+    "input": "How do I mark attendance?",
+    "role": "teacher",
+    "expect": { "responseType": "answer", "answerSource": "attendance_workflows.md", "shouldRequireConfirmation": false, "shouldBeDenied": false },
+    "needsRemote": true
+  },
+  {
+    "id": "attn-rag-hi-1",
+    "module": "Attendance",
+    "language": "hi-en",
+    "input": "Attendance kaise mark karu?",
+    "role": "teacher",
+    "expect": { "responseType": "answer", "answerSource": "attendance_workflows.md", "shouldRequireConfirmation": false, "shouldBeDenied": false },
+    "needsRemote": true
+  },
+
+  {
+    "id": "xamta-en-action-1",
+    "module": "XAMTA",
+    "language": "en",
+    "input": "Open XAMTA scanner",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_XAMTA_SCAN", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "xamta-hinglish-1",
+    "module": "XAMTA",
+    "language": "hi-en",
+    "input": "XAMTA scan kholo",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_XAMTA_SCAN", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "xamta-gu-translit-1",
+    "module": "XAMTA",
+    "language": "gu-en",
+    "input": "Worksheet scan karvo chhe",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_XAMTA_SCAN", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "xamta-en-results-1",
+    "module": "XAMTA",
+    "language": "en",
+    "input": "View past learning outcomes report",
+    "role": "principal",
+    "expect": { "responseType": "action", "actionId": "OPEN_XAMTA_RESULTS", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "xamta-rag-hi-1",
+    "module": "XAMTA",
+    "language": "hi-en",
+    "input": "XAMTA scan kya karta hai?",
+    "role": "teacher",
+    "expect": { "responseType": "answer", "answerSource": "xamta_workflows.md", "shouldRequireConfirmation": false, "shouldBeDenied": false },
+    "needsRemote": true
+  },
+  {
+    "id": "xamta-deny-pfms",
+    "module": "XAMTA",
+    "language": "en",
+    "input": "Open XAMTA scanner",
+    "role": "pfms",
+    "expect": { "responseType": "denied", "actionId": null, "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": true }
+  },
+
+  {
+    "id": "dash-en-class-1",
+    "module": "Class Dashboard",
+    "language": "en",
+    "input": "Class 6 dashboard dikhao",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_CLASS_DASHBOARD", "entities": { "class": "6" }, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "dash-hinglish-1",
+    "module": "Class Dashboard",
+    "language": "hi-en",
+    "input": "Class 8 ka performance report dikhao",
+    "role": "principal",
+    "expect": { "responseType": "action", "actionId": "OPEN_CLASS_DASHBOARD", "entities": { "class": "8" }, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "dash-en-school-1",
+    "module": "Class Dashboard",
+    "language": "en",
+    "input": "Open school dashboard",
+    "role": "principal",
+    "expect": { "responseType": "action", "actionId": "OPEN_SCHOOL_DASHBOARD", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "dash-en-district-1",
+    "module": "Class Dashboard",
+    "language": "en",
+    "input": "Show district dashboard",
+    "role": "deo",
+    "expect": { "responseType": "action", "actionId": "OPEN_DISTRICT_DASHBOARD", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "dash-en-state-1",
+    "module": "Class Dashboard",
+    "language": "en",
+    "input": "Open state command dashboard",
+    "role": "state_secretary",
+    "expect": { "responseType": "action", "actionId": "OPEN_STATE_DASHBOARD", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "dash-deny-teacher-state",
+    "module": "Class Dashboard",
+    "language": "en",
+    "input": "Open state command dashboard",
+    "role": "teacher",
+    "expect": { "responseType": "denied", "actionId": null, "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": true }
+  },
+
+  {
+    "id": "dv-en-rejected-1",
+    "module": "DigiVritti",
+    "language": "en",
+    "input": "Show rejected scholarship students",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_REJECTED_APPLICATIONS", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "dv-hi-rejected-1",
+    "module": "DigiVritti",
+    "language": "hi",
+    "input": "Mere rejected students dikhao",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_REJECTED_APPLICATIONS", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "dv-hinglish-namo-laxmi",
+    "module": "DigiVritti",
+    "language": "hi-en",
+    "input": "Namo Lakshmi kholo",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_NAMO_LAKSHMI", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "dv-en-namo-saraswati-action",
+    "module": "DigiVritti",
+    "language": "en",
+    "input": "Open Namo Saraswati",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_NAMO_SARASWATI", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "dv-gu-translit-app-list",
+    "module": "DigiVritti",
+    "language": "gu-en",
+    "input": "Application list batavo",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_APPLICATION_LIST", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "dv-rag-namo-saraswati-eligibility",
+    "module": "DigiVritti",
+    "language": "hi-en",
+    "input": "Namo Saraswati eligibility kya hai?",
+    "role": "teacher",
+    "expect": { "responseType": "answer", "answerSource": "namo_saraswati_policy.md", "shouldRequireConfirmation": false, "shouldBeDenied": false },
+    "needsRemote": true
+  },
+  {
+    "id": "dv-rag-mother-aadhaar",
+    "module": "DigiVritti",
+    "language": "hi-en",
+    "input": "Mother Aadhaar kyun required hai?",
+    "role": "teacher",
+    "expect": { "responseType": "answer", "answerSourceAnyOf": ["faq.md", "namo_lakshmi_policy.md", "namo_saraswati_policy.md"], "shouldRequireConfirmation": false, "shouldBeDenied": false },
+    "needsRemote": true
+  },
+  {
+    "id": "dv-rag-crc-process",
+    "module": "DigiVritti",
+    "language": "hi-en",
+    "input": "CRC approval ka process kya hai?",
+    "role": "crc",
+    "expect": { "responseType": "answer", "answerSourceAnyOf": ["digivritti_overview.md", "role_action_matrix.md"], "shouldRequireConfirmation": false, "shouldBeDenied": false },
+    "needsRemote": true
+  },
+  {
+    "id": "dv-deny-pfms-namo",
+    "module": "DigiVritti",
+    "language": "en",
+    "input": "Open Namo Lakshmi",
+    "role": "pfms",
+    "expect": { "responseType": "denied", "actionId": null, "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": true }
+  },
+
+  {
+    "id": "pfms-en-failed-1",
+    "module": "PFMS",
+    "language": "en",
+    "input": "Show failed payments queue",
+    "role": "pfms",
+    "expect": { "responseType": "action", "actionId": "OPEN_PAYMENT_QUEUE", "entities": { "paymentFilter": "failed" }, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "pfms-hi-failed-1",
+    "module": "PFMS",
+    "language": "hi",
+    "input": "PFMS failed payments batao",
+    "role": "pfms",
+    "expect": { "responseType": "action", "actionId": "OPEN_PAYMENT_QUEUE", "entities": { "paymentFilter": "failed" }, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "pfms-en-pending-1",
+    "module": "PFMS",
+    "language": "en",
+    "input": "Open pending payments queue",
+    "role": "pfms",
+    "expect": { "responseType": "action", "actionId": "OPEN_PAYMENT_QUEUE", "entities": { "paymentFilter": "pending" }, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "pfms-rag-retry",
+    "module": "PFMS",
+    "language": "hi-en",
+    "input": "PFMS retry process explain karo",
+    "role": "pfms",
+    "expect": { "responseType": "answer", "answerSource": "pfms_payment_process.md", "shouldRequireConfirmation": false, "shouldBeDenied": false },
+    "needsRemote": true
+  },
+  {
+    "id": "pfms-deny-teacher-queue",
+    "module": "PFMS",
+    "language": "en",
+    "input": "Open payment queue",
+    "role": "teacher",
+    "expect": { "responseType": "denied", "actionId": null, "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": true }
+  },
+
+  {
+    "id": "rep-en-report-card-1",
+    "module": "Reports",
+    "language": "en",
+    "input": "Generate report card",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_REPORT_CARD", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "rep-hinglish-student-1",
+    "module": "Reports",
+    "language": "hi-en",
+    "input": "Student performance report dikhao",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_STUDENT_REPORT", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false }
+  },
+  {
+    "id": "rep-gu-translit-1",
+    "module": "Reports",
+    "language": "gu-en",
+    "input": "Student no report banavo",
+    "role": "teacher",
+    "expect": { "responseType": "action", "actionId": "OPEN_STUDENT_REPORT", "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": false },
+    "needsRemote": true
+  },
+
+  {
+    "id": "alert-en-confirm-1",
+    "module": "Reports",
+    "language": "en",
+    "input": "Send parent alert to absent students",
+    "role": "teacher",
+    "expect": { "responseType": "confirm", "actionId": "SEND_PARENT_ALERT", "entities": {}, "shouldRequireConfirmation": true, "shouldBeDenied": false }
+  },
+  {
+    "id": "alert-hinglish-confirm-1",
+    "module": "Reports",
+    "language": "hi-en",
+    "input": "Parent alert bhejo",
+    "role": "teacher",
+    "expect": { "responseType": "confirm", "actionId": "SEND_PARENT_ALERT", "entities": {}, "shouldRequireConfirmation": true, "shouldBeDenied": false }
+  },
+  {
+    "id": "alert-deny-parent",
+    "module": "Reports",
+    "language": "en",
+    "input": "Send parent alert",
+    "role": "parent",
+    "expect": { "responseType": "denied", "actionId": null, "entities": {}, "shouldRequireConfirmation": false, "shouldBeDenied": true }
+  }
+]

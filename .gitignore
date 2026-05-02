@@ -1,0 +1,31 @@
+﻿# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+
+# environment files
+.env
+.env.local
+.env.*.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# editor/system
+.DS_Store
+.vscode/
+.idea/
+
+# vercel
+.vercel/
+
+
+
+swiftchat-design-system.md
+demo.jsx
+server/swiftchat-ai/.env.example
+server/swiftchat-ai/rag/schema.sql
