@@ -168,13 +168,69 @@ function ReportPreview({ type, dateRange }) {
   )
 }
 
+// ── KPI drill-down view definitions ──────────────────────────────────────────
+
+const KPI_REPORT_VIEWS = [
+  { view: 'proficiency_breakdown',  title: 'Proficiency breakdown',             desc: 'Distribution of students by proficiency band (mock).' },
+  { view: 'progression',            title: 'Cycle-on-cycle progression',         desc: 'Score trajectory across assessment cycles (mock).' },
+  { view: 'fln',                    title: 'ORF / FLN breakdown',               desc: 'Oral reading fluency and foundational literacy/numeracy data (mock).' },
+  { view: 'intervention_impact',    title: 'Intervention impact',               desc: 'Before/after comparison for remediation interventions (mock).' },
+  { view: 'gsqac',                  title: 'GSQAC score breakdown',             desc: 'GSQAC school quality inspection scores by domain (mock).' },
+  { view: 'gsqac_distribution',     title: 'Quality benchmark distribution',    desc: 'Schools distributed across quality benchmark tiers (mock).' },
+  { view: 'gsqac_history',          title: 'GSQAC historical comparison',       desc: 'Year-on-year GSQAC score trend for this cluster (mock).' },
+  { view: 'improvement_actions',    title: 'Improvement actions tracker',       desc: 'Outstanding and completed quality improvement actions (mock).' },
+  { view: 'data_timeliness',        title: 'Same-day reporting timeliness',     desc: 'Percentage of schools submitting attendance same day (mock).' },
+  { view: 'data_lag',               title: 'Dashboard data lag monitor',        desc: 'Time between data entry and dashboard sync across schools (mock).' },
+  { view: 'dropout',                title: 'Dropout reduction view',            desc: 'Trend in student dropouts vs retention interventions (mock).' },
+  { view: 'reenrollment',           title: 'Re-enrollment progress',            desc: 'Students successfully re-enrolled after dropout (mock).' },
+  { view: 'pm_shri',                title: 'PM SHRI school performance',        desc: 'Performance indicators for PM SHRI designated schools (mock).' },
+  { view: 'parent_proficiency',     title: "Your child's assessment",           desc: 'Parent-facing view of the child\'s latest assessment result (mock).' },
+  { view: 'pending_downloads',      title: 'Schools with pending report downloads', desc: 'Schools that have not yet downloaded the latest cycle report (mock).' },
+  { view: 'tpd_progress',           title: 'TPD hours — training progress',     desc: 'Your professional development progress (hours logged vs the 50-hour annual target). Modules across Prashikshak and Shikshak Sahayak 2.0 (mock).' },
+]
+
+function KpiReportView({ viewKey, onClose }) {
+  const meta = KPI_REPORT_VIEWS.find(v => v.view === viewKey)
+  if (!meta) return null
+  return (
+    <section className="p-4">
+      <div className="rounded-2xl border border-bdr-light bg-white p-4 shadow-card">
+        <h3 className="text-[13px] font-bold text-txt-primary">{meta.title}</h3>
+        <p className="text-[12px] text-txt-secondary mt-1">{meta.desc}</p>
+        <div className="mt-3 h-32 rounded-lg bg-surface-page" />
+      </div>
+    </section>
+  )
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function ReportCanvas({ context }) {
   const { showToast, closeCanvas } = useApp()
+  const view = context?.view || null
   const [reportType, setReportType] = useState(context.reportType || 'attendance')
   const [dateRange, setDateRange] = useState('month')
   const [generated, setGenerated] = useState(false)
+
+  // If a KPI view key is supplied, render the targeted placeholder and skip
+  // the full report-generator UI entirely.
+  if (view && KPI_REPORT_VIEWS.some(v => v.view === view)) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 overflow-y-auto bg-surface-secondary">
+          <KpiReportView viewKey={view} />
+        </div>
+        <div className="px-3.5 py-3 border-t border-bdr-light bg-white flex-shrink-0">
+          <button
+            onClick={closeCanvas}
+            className="w-full h-11 rounded-2xl border-[1.5px] border-bdr text-txt-secondary font-bold text-[13px]"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const handleGenerate = () => {
     setGenerated(true)

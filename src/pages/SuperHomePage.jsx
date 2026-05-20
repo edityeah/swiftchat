@@ -22,6 +22,7 @@ import {
   tokens as CHART, fmt as fmtNum, ui as chartUi,
 } from '../utils/dashboardCharts'
 import { ROLE_BOTS, ROLE_SUGGESTIONS } from '../roles/roleConfig'
+import { AGGREGATES as REGISTRY_AGG, aggregatesFor } from '../data/registries'
 import { dispatchDigiVritti, isDigiVrittiTrigger } from '../utils/digivrittiChat'
 import { groupByRecency, detectTool, TOOL_TITLES } from '../utils/chatHistory'
 import { routeIntentSync, routeIntent } from '../nlp/globalIntentRouter'
@@ -38,6 +39,7 @@ import {
 import {
   isAskAiActionTrigger, decodeAskAiActionTrigger, runAskAiAction,
 } from '../features/askAi/askAiActions'
+import ReportCardSection from '../components/kpi/ReportCardSection'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -1672,54 +1674,110 @@ function MessageBubble({ msg, onChipClick, onAction, onCardClick }) {
 function getRoleAlerts(role, profile) {
   const risk = AT_RISK_STUDENTS?.filter(s => s.risk === 'high')?.length || 0
   const pending = NAMO_LAXMI_APPS?.filter(a => a.status === 'pending')?.length || 0
-  if (role === 'teacher') return [
-    { icon: '👥', label: 'Students',          value: `${STUDENTS[8]?.length || 30}`, color: '#386AF6',
-      canvas: { type: 'student-roster',  grade: 8, classLabel: 'Class 8' } },
-    { icon: '⚠️', label: 'At Risk',           value: `${risk}`, color: '#DC2626',
-      canvas: { type: 'at-risk-students', grade: 8 } },
-    { icon: '📋', label: 'DigiVritti Pending', value: `${pending}`, color: '#D97706',
-      trigger: 'dv:canvas:list:pending' },
-    { icon: '📊', label: 'Avg Score',         value: `${PERF_DATA[8]?.math || 74}%`, color: '#16A34A',
-      canvas: { type: 'class-report', grade: 8, classLabel: 'Class 8' } },
-  ]
+  if (role === 'teacher') {
+    // Pin every teacher-scope drilldown to the teacher's primary class so the
+    // home tile counts always agree with the canvas. Falls back to grade 8
+    // for legacy profiles without a `classes` array.
+    const teacherGrade = profile?.classes?.[0] || 8
+    return [
+      { icon: '👥', label: 'Students', value: `${STUDENTS[teacherGrade]?.length || 30}`, color: '#386AF6',
+        canvas: { type: 'student-roster', grade: teacherGrade, classLabel: `Class ${teacherGrade}` } },
+      { icon: '⚠️', label: 'At Risk', value: `${risk}`, color: '#DC2626',
+        canvas: { type: 'at-risk-students', grade: teacherGrade } },
+      { icon: '📋', label: 'DigiVritti Pending', value: `${pending}`, color: '#D97706',
+        trigger: 'dv:canvas:list:pending' },
+      { icon: '📊', label: 'Avg Score', value: `${PERF_DATA[teacherGrade]?.math || 74}%`, color: '#16A34A',
+        canvas: { type: 'class-report', grade: teacherGrade, classLabel: `Class ${teacherGrade}` } },
+    ]
+  }
   if (role === 'principal') return [
-    { icon: '🏫', label: 'Total Students', value: '342', color: '#386AF6' },
-    { icon: '📅', label: 'Today Att.', value: '88%', color: '#16A34A' },
-    { icon: '⚠️', label: 'Alerts', value: `${risk}`, color: '#DC2626' },
-    { icon: '🏅', label: 'Scholarships', value: '82%', color: '#7C3AED' },
+    { icon: '🏫', label: 'Total Students', value: '342', color: '#386AF6',
+      canvas: { type: 'student-roster', scope: 'school', classLabel: 'Whole school' } },
+    { icon: '👩‍🏫', label: 'Teachers', value: '18', color: '#0EA5E9',
+      canvas: { type: 'registry', kind: 'teachers', scope: 'school',
+                district: profile?.district || 'Mehsana',
+                schoolName: profile?.school || 'Sardar Patel Prathmik Shala',
+                teacherCount: 18, studentCount: 342 } },
+    { icon: '📅', label: 'Teacher Att.', value: '17/18', color: '#16A34A',
+      canvas: { type: 'teacher-attendance' } },
+    { icon: '⚠️', label: 'At-risk', value: `${risk}`, color: '#DC2626',
+      canvas: { type: 'at-risk-students', grade: 8 } },
   ]
-  if (role === 'deo') return [
-    { icon: '🏫', label: 'Schools', value: '412', color: '#386AF6' },
-    { icon: '👥', label: 'Students', value: '24.8K', color: '#7C3AED' },
-    { icon: '📅', label: 'Avg Att.', value: '84%', color: '#16A34A' },
-    { icon: '⚠️', label: 'Flagged', value: '142', color: '#DC2626' },
-  ]
+  if (role === 'deo') {
+    const district = profile?.district || 'Ahmedabad'
+    const agg = aggregatesFor('district', district) || {}
+    return [
+      { icon: '🏫', label: 'Schools', value: Number(agg.schools || 0).toLocaleString(), color: '#386AF6',
+        canvas: { type: 'registry', kind: 'schools', scope: 'district', district } },
+      { icon: '👩‍🏫', label: 'Teachers', value: agg.teachers ? `${(agg.teachers/1000).toFixed(1)}K` : '—', color: '#7C3AED',
+        canvas: { type: 'registry', kind: 'teachers', scope: 'district', district } },
+      { icon: '👥', label: 'Students', value: agg.students ? `${(agg.students/1e5).toFixed(1)}L` : '—', color: '#059669',
+        canvas: { type: 'dashboard', scope: 'district', district } },
+      { icon: '⚠️', label: 'At-risk', value: '142', color: '#DC2626',
+        canvas: { type: 'at-risk-students', grade: 8 } },
+    ]
+  }
   if (role === 'state_secretary') return [
-    { icon: '🏛️', label: 'Districts', value: '33', color: '#386AF6' },
-    { icon: '🏫', label: 'Schools', value: '33.2K', color: '#7C3AED' },
-    { icon: '👥', label: 'Students', value: '8.2M', color: '#059669' },
-    { icon: '📅', label: 'Avg Att.', value: '85.4%', color: '#16A34A' },
+    { icon: '🏛️', label: 'Districts', value: String(REGISTRY_AGG.districtCount), color: '#386AF6',
+      canvas: { type: 'registry', kind: 'districts' } },
+    { icon: '🏫', label: 'Schools', value: `${(REGISTRY_AGG.totalSchools / 1000).toFixed(1)}K`, color: '#7C3AED',
+      canvas: { type: 'registry', kind: 'schools' } },
+    { icon: '👥', label: 'Students', value: `${(REGISTRY_AGG.totalStudents / 1e6).toFixed(1)}M`, color: '#059669',
+      canvas: { type: 'dashboard', scope: 'state' } },
+    { icon: '📅', label: 'Avg Att.', value: '85.4%', color: '#16A34A',
+      canvas: { type: 'dashboard', scope: 'state' } },
   ]
   // PFMS — payment-side stats only.
   if (role === 'pfms') return [
-    { icon: '🏦', label: 'Pending',   value: '12.4K', color: '#D97706' },
-    { icon: '✅', label: 'Disbursed', value: '₹428Cr', color: '#16A34A' },
-    { icon: '🔻', label: 'Failed',    value: '65',    color: '#DC2626' },
-    { icon: '📊', label: 'Success%',  value: '94.2%', color: '#386AF6' },
+    { icon: '🏦', label: 'Pending',   value: '12.4K', color: '#D97706',
+      canvas: { type: 'digivritti', view: 'payment-queue', status: 'pending' } },
+    { icon: '✅', label: 'Disbursed', value: '₹428Cr', color: '#16A34A',
+      canvas: { type: 'digivritti', view: 'payment-queue', status: 'success' } },
+    { icon: '🔻', label: 'Failed',    value: '65',    color: '#DC2626',
+      canvas: { type: 'digivritti', view: 'payment-queue', status: 'failed' } },
+    { icon: '📊', label: 'Success%',  value: '94.2%', color: '#386AF6',
+      canvas: { type: 'digivritti', view: 'analytics' } },
   ]
-  // CRC — cluster approver stats.
-  if (role === 'crc') return [
-    { icon: '⏳', label: 'Pending',     value: '38',    color: '#D97706' },
-    { icon: '✅', label: 'Approved/mo', value: '156',   color: '#16A34A' },
-    { icon: '❌', label: 'Rejected/mo', value: '12',    color: '#DC2626' },
-    { icon: '📈', label: 'Approval%',   value: '92.9%', color: '#386AF6' },
-  ]
+  // CRC — cluster approver. Show cluster-scoped registry + approval queue.
+  if (role === 'crc') {
+    const cluster = profile?.cluster || 'MADHAPAR'
+    const agg = aggregatesFor('cluster', cluster) || {}
+    return [
+      { icon: '🏫', label: 'Schools', value: Number(agg.schools || 0).toLocaleString(), color: '#386AF6',
+        canvas: { type: 'registry', kind: 'schools', scope: 'cluster', cluster } },
+      { icon: '👩‍🏫', label: 'Teachers', value: Number(agg.teachers || 0).toLocaleString(), color: '#0EA5E9',
+        canvas: { type: 'registry', kind: 'teachers', scope: 'cluster', cluster } },
+      { icon: '⏳', label: 'Pending reviews', value: '38', color: '#D97706',
+        canvas: { type: 'digivritti', view: 'review' } },
+      { icon: '📈', label: 'Approval%', value: '92.9%', color: '#16A34A',
+        canvas: { type: 'dashboard', scope: 'cluster' } },
+    ]
+  }
+  // BEO — block education officer. Block-scoped real data.
+  if (role === 'beo') {
+    const block = profile?.block || 'Mehsana'
+    const agg = aggregatesFor('block', block) || {}
+    return [
+      { icon: '🏫', label: 'Schools', value: Number(agg.schools || 0).toLocaleString(), color: '#386AF6',
+        canvas: { type: 'registry', kind: 'schools', scope: 'block', block } },
+      { icon: '👩‍🏫', label: 'Teachers', value: Number(agg.teachers || 0).toLocaleString(), color: '#0EA5E9',
+        canvas: { type: 'registry', kind: 'teachers', scope: 'block', block } },
+      { icon: '👥', label: 'Students', value: agg.students ? `${(agg.students/1000).toFixed(1)}K` : '—', color: '#059669',
+        canvas: { type: 'dashboard', scope: 'district' } },
+      { icon: '⚠️', label: 'Below benchmark', value: '7', color: '#DC2626',
+        canvas: { type: 'at-risk-students' } },
+    ]
+  }
   // Parent — child-only metrics, no scholarship management.
   return [
-    { icon: '📅', label: 'Attendance',  value: '74%',  color: '#D97706' },
-    { icon: '📊', label: 'Avg Score',   value: '68%',  color: '#386AF6' },
-    { icon: '📖', label: 'Homework',    value: 'Due',  color: '#7C3AED' },
-    { icon: '🎓', label: 'Grade',       value: profile?.childGrade || 'Class 8', color: '#16A34A' },
+    { icon: '📅', label: 'Attendance',  value: '74%',  color: '#D97706',
+      canvas: { type: 'attendance', view: 'parent' } },
+    { icon: '📊', label: 'Avg Score',   value: '68%',  color: '#386AF6',
+      canvas: { type: 'report', view: 'parent_proficiency' } },
+    { icon: '📖', label: 'Homework',    value: 'Due',  color: '#7C3AED',
+      canvas: { type: 'attendance', view: 'parent' } },
+    { icon: '🎓', label: 'Grade',       value: profile?.childGrade || 'Class 8', color: '#16A34A',
+      canvas: { type: 'report', view: 'parent_proficiency' } },
   ]
 }
 
@@ -1791,6 +1849,11 @@ function WelcomeScreen({ botName, onChip, role, profile, onOpenCanvas }) {
           })}
         </div>
       </div>
+
+      {/* KPI report card — injected here for roles that have KPIs. Returns
+          null for roles with no KPIs (e.g. DEO), so the original WelcomeScreen
+          flow is preserved for those. */}
+      <ReportCardSection />
 
       {/* Quick Actions */}
       <div className="w-full max-w-[704px]">
@@ -3188,6 +3251,9 @@ export default function SuperHomePage() {
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden" style={{ background: '#FFFFFF' }}>
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 pt-4" style={{ background: '#FFFFFF', paddingBottom: 16 }}>
               {!hasMessages ? (
+                // WelcomeScreen now contains the KPI report card (when the role
+                // has KPIs) injected between its alerts strip and Quick Actions.
+                // Roles with no KPIs (deo) see the original WelcomeScreen.
                 <WelcomeScreen botName={activeBot} onChip={handleSend} role={role} profile={userProfile} onOpenCanvas={ctx => openCanvas({ ...ctx, role })} />
               ) : (
                 <>

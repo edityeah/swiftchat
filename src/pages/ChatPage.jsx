@@ -11,17 +11,46 @@ import AttendanceGrid from '../components/AttendanceGrid'
 import { useChat } from '../hooks/useChat'
 import { getChatConfig, getInitialMessage } from '../utils/chatData'
 import { now } from '../utils/helpers'
+import { KPI_CATALOG } from '../kpi/kpiCatalog'
+import { computeKpi } from '../kpi/kpiEngine'
 
 export default function ChatPage({ chatId }) {
-  const { role, goBack, openCall, openCanvas, showToast } = useApp()
+  const { role, userProfile, goBack, openCall, openCanvas, showToast, activeChat } = useApp()
   const cfg = getChatConfig(chatId, role)
   const [usedChips, setUsedChips] = useState([])
   const [micActive, setMicActive] = useState(false)
   const [showAtt, setShowAtt] = useState(false)
   const bodyRef = useRef(null)
 
-  const init = getInitialMessage(chatId, role)
-  const initMsgs = init ? [{ id: 1, type: 'bot', html: init.html, actions: init.actions || [], time: now() }] : []
+  // For chat_kpi: prefer the persisted activeChat.messages (which carries
+  // the kpi_insight bubble seeded at chat-creation time). If they're missing
+  // for some reason but toolState carries a kpiId, fall back to synthesising
+  // the bubble from the catalog so the thread is never blank.
+  let initMsgs
+  if (chatId === 'kpi') {
+    if (activeChat?.messages && activeChat.messages.length > 0) {
+      initMsgs = activeChat.messages
+    } else if (activeChat?.toolState?.kpiId) {
+      const kpi = KPI_CATALOG.find(k => k.id === activeChat.toolState.kpiId)
+      if (kpi) {
+        const computed = computeKpi(kpi, role, userProfile || {})
+        initMsgs = [{
+          id: 1,
+          type: 'bot',
+          kind: 'kpi_insight',
+          kpi: computed,
+          time: now(),
+        }]
+      } else {
+        initMsgs = []
+      }
+    } else {
+      initMsgs = []
+    }
+  } else {
+    const init = getInitialMessage(chatId, role)
+    initMsgs = init ? [{ id: 1, type: 'bot', html: init.html, actions: init.actions || [], time: now() }] : []
+  }
 
   const { messages, typing, sendMessage, addBotMessage } = useChat(chatId, role, initMsgs)
 

@@ -99,7 +99,7 @@ export function getReply(chatId, role, input) {
     if (has(q, 'student data', 'enter data', 'add student', 'data entry', 'form'))
       return { html: `👤 <strong>Student Data Entry</strong><br>Add new student or update existing records`, actions: [{ label: '👤 Open Data Entry', canvas: { type: 'data-entry', role } }] }
     if (has(q, 'xamta', 'scan', 'grade', 'paper', 'exam'))
-      return { html: `📝 <strong>XAMTA ready</strong><br>Class 6-B · 38 sheets pending<br>Last avg: 67% — tap to launch scanner:`, actions: [{ label: '📷 Open XAMTA', chatId: 'xamta' }] }
+      return { html: `📝 <strong>XAMTA ready</strong><br>Class 6-B · 38 sheets pending<br>Last avg: 67% — tap to launch scanner:`, actions: [{ label: '📷 Open XAMTA', canvas: { type: 'class-report', grade: 6, classLabel: 'Class 6-B', view: 'xamta_scan', role } }] }
     if (has(q, 'namo', 'scholarship', 'laxmi'))
       return { html: `🏅 <strong>Namo Laxmi — Class 6-B</strong><br>🔴 Ravi — 74% · 🔴 Komal — 71% · 🟡 Isha — 79%`, actions: [{ label: '📋 Scholarship Report', canvas: { type: 'report', reportType: 'scholarship', role } }, { label: '📨 Notify Ravi', action: 'notify_ravi' }] }
     if (has(q, 'at-risk', 'dropout', 'ews', 'risk'))
@@ -116,10 +116,10 @@ export function getReply(chatId, role, input) {
     if (has(q, 'report', 'generate', 'pdf'))
       return { html: `📋 <strong>District Reports</strong><br>Attendance · DBT · Block Analysis · EWS`, actions: [{ label: '📋 Generate Report', canvas: { type: 'report', scope: 'district', role } }] }
     if (has(q, 'dbt', 'scholarship', 'namo'))
-      return { html: `💰 <strong>Namo Laxmi: 97% disbursed</strong><br>1,128 blocked · 3,468 parent alerts sent`, actions: [{ label: '📊 Full DBT report', chatId: 'dbt' }, { label: '📊 Dashboard', canvas: { type: 'dashboard', scope: 'district', role } }] }
+      return { html: `💰 <strong>Namo Laxmi: 97% disbursed</strong><br>1,128 blocked · 3,468 parent alerts sent`, actions: [{ label: '📊 Full DBT report', canvas: { type: 'digivritti', view: 'payment-queue', role } }, { label: '📊 Dashboard', canvas: { type: 'dashboard', scope: 'district', role } }] }
     if (has(q, 'attendance', 'daskroi', 'district'))
-      return { html: `📊 <strong>Ahmedabad: 87.3%</strong><br>Bavla 91.8% ↑↑ · Daskroi 72.1% ↓↓ · 142 schools <70%`, actions: [{ label: '📊 District Dashboard', canvas: { type: 'dashboard', scope: 'district', role } }, { label: '🗺️ Block view', chatId: 'datt' }] }
-    return { html: `District: 87.3% | Daskroi: 72.1% (War Room Day 1) | DBT: 94%`, actions: [{ label: '📊 Dashboard', canvas: { type: 'dashboard', scope: 'district', role } }, { label: '💰 DBT', chatId: 'dbt' }, { label: '🎯 War Room', chatId: 'warroom' }] }
+      return { html: `📊 <strong>Ahmedabad: 87.3%</strong><br>Bavla 91.8% ↑↑ · Daskroi 72.1% ↓↓ · 142 schools <70%`, actions: [{ label: '📊 District Dashboard', canvas: { type: 'dashboard', scope: 'district', role } }, { label: '🗺️ Block view', canvas: { type: 'dashboard', scope: 'district', view: 'block_breakdown', role } }] }
+    return { html: `District: 87.3% | Daskroi: 72.1% (War Room Day 1) | DBT: 94%`, actions: [{ label: '📊 Dashboard', canvas: { type: 'dashboard', scope: 'district', role } }, { label: '💰 DBT', canvas: { type: 'digivritti', view: 'payment-queue', role } }, { label: '🎯 War Room', canvas: { type: 'dashboard', scope: 'district', view: 'war_room', role } }] }
   }
 
   // ── SwiftChat Parent ──
@@ -127,9 +127,9 @@ export function getReply(chatId, role, input) {
     if (has(q, 'download', 'report', 'pdf', 'certificate'))
       return { html: `📥 <strong>Download Ravi's Documents</strong><br>Report Card · Attendance Certificate · Scholarship Letter`, actions: [{ label: '📄 Download PDF', canvas: { type: 'pdf', docType: 'report-card', role } }] }
     if (has(q, 'attendance', 'absent'))
-      return { html: `📅 <strong>Ravi March: 74%</strong><br>6 absences · 4 days left · needs ≥80% for Namo Laxmi`, actions: [{ label: '📅 Full calendar', chatId: 'catt' }, { label: '💬 Message teacher', chatId: 'tmsg' }] }
+      return { html: `📅 <strong>Ravi March: 74%</strong><br>6 absences · 4 days left · needs ≥80% for Namo Laxmi`, actions: [{ label: '📅 Full calendar', canvas: { type: 'attendance', view: 'parent', role } }, { label: '💬 Message teacher', canvas: { type: 'digivritti', view: 'parent_status', role } }] }
     if (has(q, 'scholarship', 'namo'))
-      return { html: `🏅 <strong style="color:#E53935">AT RISK for April</strong><br>74% < 80% — need all 4 remaining days`, actions: [{ label: '📊 Details', chatId: 'cschol' }, { label: '💬 Teacher', chatId: 'tmsg' }] }
+      return { html: `🏅 <strong style="color:#E53935">AT RISK for April</strong><br>74% < 80% — need all 4 remaining days`, actions: [{ label: '📊 Details', canvas: { type: 'digivritti', view: 'parent_status', role } }, { label: '💬 Teacher', canvas: { type: 'attendance', view: 'parent', role } }] }
     return { html: `Ravi's March: 74% ⚠️ Ask about attendance, scholarship, or teacher contact.<br><em>Try: "download report card", "scholarship status"</em>`, actions: [] }
   }
 

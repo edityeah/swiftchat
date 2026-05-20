@@ -52,16 +52,43 @@ const TABS = [
 
 export default function StudentRosterCanvas({ context }) {
   const { closeCanvas, openCanvas, openNotificationsCanvas, showToast } = useApp()
-  const grade = context?.grade || context?.classId || 8
-  const klassLabel = context?.classLabel || `Class ${grade}`
-  const all = useMemo(() => STUDENTS[grade] || STUDENTS[8] || [], [grade])
 
+  // Principal / school-wide view: when classLabel === 'Whole school' (or
+  // scope === 'school'), aggregate across every grade we have mock data for
+  // and surface a class filter so the user can drill into one class.
+  const schoolWide = context?.scope === 'school' || context?.classLabel === 'Whole school'
+  const grade = context?.grade || context?.classId || 8
+  const availableGrades = useMemo(
+    () => Object.keys(STUDENTS).map(g => Number(g)).sort((a, b) => a - b),
+    [],
+  )
+
+  const [classFilter, setClassFilter] = useState('all')
   const [tab, setTab]   = useState('all')
   const [query, setQuery] = useState('')
   const [openId, setOpenId] = useState(null)
 
+  // `all` = the unfiltered student pool (for totals). `pool` = after class
+  // filter (for tab summary chips + roster list).
+  const all = useMemo(() => {
+    if (schoolWide) {
+      return availableGrades.flatMap(g =>
+        (STUDENTS[g] || []).map(s => ({ ...s, grade: g })),
+      )
+    }
+    return (STUDENTS[grade] || STUDENTS[8] || []).map(s => ({ ...s, grade }))
+  }, [schoolWide, grade, availableGrades])
+
+  const klassLabel = schoolWide
+    ? (context?.classLabel || 'Whole school')
+    : (context?.classLabel || `Class ${grade}`)
+
   const filtered = useMemo(() => {
     let list = all
+    if (schoolWide && classFilter !== 'all') {
+      const g = Number(classFilter)
+      list = list.filter(s => s.grade === g)
+    }
     if (tab === 'risk')  list = list.filter(s => s.risk !== 'low')
     if (tab === 'top')   list = list.filter(s => s.level === 'Advanced')
     if (tab === 'nl')    list = list.filter(s => s.namoLaxmi)
@@ -70,7 +97,7 @@ export default function StudentRosterCanvas({ context }) {
       list = list.filter(s => s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q))
     }
     return list
-  }, [all, tab, query])
+  }, [all, schoolWide, classFilter, tab, query])
 
   const totals = useMemo(() => {
     const att = all.length ? Math.round(all.reduce((a, s) => a + (s.attendance || 0), 0) / all.length) : 0
@@ -112,6 +139,27 @@ export default function StudentRosterCanvas({ context }) {
           <SummaryChip value={`${totals.atRisk}`}   label="At Risk"   color="#DC2626" />
         </div>
       </div>
+
+      {/* School-wide view: class filter row */}
+      {schoolWide && (
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-bdr-light bg-white flex-shrink-0 overflow-x-auto scrollbar-hide">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-txt-tertiary flex-shrink-0">Class</span>
+          <button
+            onClick={() => setClassFilter('all')}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold ${classFilter === 'all' ? 'bg-primary text-white' : 'bg-surface-secondary text-txt-secondary'}`}
+          >All ({all.length})</button>
+          {availableGrades.map(g => {
+            const n = (STUDENTS[g] || []).length
+            return (
+              <button
+                key={g}
+                onClick={() => setClassFilter(String(g))}
+                className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[12px] font-semibold ${classFilter === String(g) ? 'bg-primary text-white' : 'bg-surface-secondary text-txt-secondary'}`}
+              >Class {g} ({n})</button>
+            )
+          })}
+        </div>
+      )}
 
       {/* Tabs + search */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-bdr-light bg-white flex-shrink-0 overflow-x-auto scrollbar-hide">

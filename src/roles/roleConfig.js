@@ -10,6 +10,7 @@ export const ROLE_LABELS = {
   parent:          'Parent',
   crc:             'CRC · Cluster Approver',
   pfms:            'PFMS · Payment Officer',
+  beo:             'BEO · Block Education Officer',
 }
 
 export const ROLE_SCOPES = {
@@ -20,6 +21,7 @@ export const ROLE_SCOPES = {
   parent:          'Student',
   crc:             'Cluster',
   pfms:            'State (Payments)',
+  beo:             'Block',
 }
 
 // Bot list per role
@@ -65,6 +67,13 @@ export const ROLE_BOTS = {
     'VSK Gujarat',
     'DigiVritti Payments',
     'PFMS Console',
+  ],
+  beo: [
+    'VSK Gujarat',
+    'Block Analyst',
+    'School Monitor',
+    'Intervention Bot',
+    'Compliance Bot',
   ],
 }
 
@@ -128,29 +137,49 @@ export const ROLE_SUGGESTIONS = {
     'Sanctioned vs disbursed',
     'Open DigiVritti payments',
   ],
+  beo: [
+    'Block attendance summary',
+    'Schools below benchmark',
+    'Compare clusters in my block',
+    'Pending grievances in block',
+    'GSQAC scores — block view',
+    'Open my full report card',
+    'What should I fix first?',
+  ],
 }
 
 // Canvas modules accessible per role
 export const ROLE_CANVASES = {
   teacher: [
-    'attendance', 'lesson_plan', 'quiz', 'homework', 'report_card',
+    'attendance', 'lesson_plan', 'quiz', 'homework', 'report_card', 'kpi_insight',
     'at_risk', 'remediation', 'parent_notify', 'brc_visit', 'peer_buddy',
     'namo_laxmi', 'scholarship', 'learning_outcomes', 'xamta_scan',
   ],
   principal: [
     'attendance', 'school_dashboard', 'at_risk', 'parent_notify',
-    'teacher_activity', 'report_card', 'scholarship', 'learning_outcomes',
+    'teacher_activity', 'report_card', 'kpi_insight', 'scholarship', 'learning_outcomes',
   ],
   deo: [
     'district_dashboard', 'attendance', 'scholarship', 'war_room',
-    'block_analysis', 'report_card', 'at_risk',
+    'block_analysis', 'at_risk',
   ],
   state_secretary: [
     'state_dashboard', 'district_dashboard', 'scholarship', 'war_room',
-    'intervention_map', 'scheme_analytics', 'report_card',
+    'intervention_map', 'scheme_analytics', 'report_card', 'kpi_insight',
   ],
   parent: [
-    'attendance', 'scholarship', 'report_card', 'homework',
+    'attendance', 'scholarship', 'report_card', 'kpi_insight', 'homework',
+  ],
+  beo: [
+    'attendance', 'school_dashboard', 'at_risk', 'parent_notify',
+    'report_card', 'kpi_insight', 'scholarship', 'learning_outcomes', 'war_room',
+    'block_analysis',
+  ],
+  crc: [
+    'report_card', 'kpi_insight',
+  ],
+  pfms: [
+    'report_card', 'kpi_insight',
   ],
 }
 
@@ -168,6 +197,7 @@ export const NOTIFICATION_PERMISSIONS = {
   crc:             { canCreateBroadcast: false, canCreateReminder: true, canViewNotifications: true  },
   brc:             { canCreateBroadcast: false, canCreateReminder: true, canViewNotifications: true  },
   pfms:            { canCreateBroadcast: false, canCreateReminder: true, canViewNotifications: true  },
+  beo:             { canCreateBroadcast: false, canCreateReminder: true, canViewNotifications: true },
 }
 
 export function getNotificationPermissions(role) {
@@ -238,5 +268,14 @@ export const ROLE_PERMISSIONS = {
     canViewState: true,
     canApproveScholarship: false, // PFMS does not approve eligibility
     canViewTeacherData: false,
+  },
+  beo: {
+    canMarkAttendance: false,
+    canViewAllStudents: true,
+    canCreateContent: false,
+    canViewDistrict: false,
+    canViewState: false,
+    canApproveScholarship: true,
+    canViewTeacherData: true,
   },
 }

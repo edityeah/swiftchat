@@ -1,0 +1,299 @@
+[
+  {
+    "districtId": 2407,
+    "name": "AHMEDABAD",
+    "schools": 3968,
+    "teachers": 40826,
+    "students": 1487075,
+    "blocks": 11,
+    "clusters": 195
+  },
+  {
+    "districtId": 2422,
+    "name": "SURAT",
+    "schools": 3353,
+    "teachers": 39271,
+    "students": 1389390,
+    "blocks": 10,
+    "clusters": 134
+  },
+  {
+    "districtId": 2402,
+    "name": "BANASKANTHA",
+    "schools": 3374,
+    "teachers": 23408,
+    "students": 737906,
+    "blocks": 14,
+    "clusters": 226
+  },
+  {
+    "districtId": 2409,
+    "name": "RAJKOT",
+    "schools": 2671,
+    "teachers": 21588,
+    "students": 620761,
+    "blocks": 12,
+    "clusters": 126
+  },
+  {
+    "districtId": 2419,
+    "name": "VADODARA",
+    "schools": 2113,
+    "teachers": 18853,
+    "students": 599247,
+    "blocks": 9,
+    "clusters": 118
+  },
+  {
+    "districtId": 2418,
+    "name": "DOHAD",
+    "schools": 2295,
+    "teachers": 16053,
+    "students": 544825,
+    "blocks": 9,
+    "clusters": 158
+  },
+  {
+    "districtId": 2401,
+    "name": "KACHCHH",
+    "schools": 2546,
+    "teachers": 15392,
+    "students": 452462,
+    "blocks": 10,
+    "clusters": 177
+  },
+  {
+    "districtId": 2414,
+    "name": "BHAVNAGAR",
+    "schools": 1620,
+    "teachers": 13413,
+    "students": 437818,
+    "blocks": 10,
+    "clusters": 97
+  },
+  {
+    "districtId": 2415,
+    "name": "ANAND",
+    "schools": 1631,
+    "teachers": 13098,
+    "students": 390767,
+    "blocks": 8,
+    "clusters": 105
+  },
+  {
+    "districtId": 2416,
+    "name": "KHEDA",
+    "schools": 1987,
+    "teachers": 13132,
+    "students": 385776,
+    "blocks": 10,
+    "clusters": 127
+  },
+  {
+    "districtId": 2404,
+    "name": "MAHESANA",
+    "schools": 1615,
+    "teachers": 13097,
+    "students": 372564,
+    "blocks": 10,
+    "clusters": 102
+  },
+  {
+    "districtId": 2417,
+    "name": "PANCH MAHALS",
+    "schools": 1848,
+    "teachers": 12023,
+    "students": 359736,
+    "blocks": 7,
+    "clusters": 123
+  },
+  {
+    "districtId": 2425,
+    "name": "VALSAD",
+    "schools": 1501,
+    "teachers": 12311,
+    "students": 355660,
+    "blocks": 6,
+    "clusters": 93
+  },
+  {
+    "districtId": 2406,
+    "name": "GANDHINAGAR",
+    "schools": 1347,
+    "teachers": 12770,
+    "students": 351244,
+    "blocks": 4,
+    "clusters": 65
+  },
+  {
+    "districtId": 2421,
+    "name": "BHARUCH",
+    "schools": 1450,
+    "teachers": 11199,
+    "students": 310778,
+    "blocks": 9,
+    "clusters": 80
+  },
+  {
+    "districtId": 2405,
+    "name": "SABAR KANTHA",
+    "schools": 1744,
+    "teachers": 10953,
+    "students": 306857,
+    "blocks": 8,
+    "clusters": 123
+  },
+  {
+    "districtId": 2408,
+    "name": "SURENDRANAGAR",
+    "schools": 1407,
+    "teachers": 9832,
+    "students": 282636,
+    "blocks": 10,
+    "clusters": 88
+  },
+  {
+    "districtId": 2410,
+    "name": "JAMNAGAR",
+    "schools": 1320,
+    "teachers": 9259,
+    "students": 257088,
+    "blocks": 6,
+    "clusters": 71
+  },
+  {
+    "districtId": 2403,
+    "name": "PATAN",
+    "schools": 1208,
+    "teachers": 8730,
+    "students": 256963,
+    "blocks": 9,
+    "clusters": 72
+  },
+  {
+    "districtId": 2412,
+    "name": "JUNAGADH",
+    "schools": 1430,
+    "teachers": 9283,
+    "students": 232646,
+    "blocks": 10,
+    "clusters": 90
+  },
+  {
+    "districtId": 2413,
+    "name": "AMRELI",
+    "schools": 1250,
+    "teachers": 8348,
+    "students": 232504,
+    "blocks": 11,
+    "clusters": 76
+  },
+  {
+    "districtId": 2433,
+    "name": "MORBI",
+    "schools": 952,
+    "teachers": 7335,
+    "students": 221299,
+    "blocks": 5,
+    "clusters": 56
+  },
+  {
+    "districtId": 2424,
+    "name": "NAVSARI",
+    "schools": 1052,
+    "teachers": 8134,
+    "students": 216881,
+    "blocks": 6,
+    "clusters": 67
+  },
+  {
+    "districtId": 2427,
+    "name": "ARAVALLI",
+    "schools": 1607,
+    "teachers": 8543,
+    "students": 216736,
+    "blocks": 6,
+    "clusters": 118
+  },
+  {
+    "districtId": 2430,
+    "name": "GIR SOMNATH",
+    "schools": 967,
+    "teachers": 7686,
+    "students": 214787,
+    "blocks": 6,
+    "clusters": 57
+  },
+  {
+    "districtId": 2431,
+    "name": "MAHISAGAR",
+    "schools": 1541,
+    "teachers": 7691,
+    "students": 208396,
+    "blocks": 6,
+    "clusters": 106
+  },
+  {
+    "districtId": 2432,
+    "name": "CHHOTAUDEPUR",
+    "schools": 1515,
+    "teachers": 5873,
+    "students": 164508,
+    "blocks": 6,
+    "clusters": 102
+  },
+  {
+    "districtId": 2428,
+    "name": "BOTAD",
+    "schools": 451,
+    "teachers": 3839,
+    "students": 131751,
+    "blocks": 4,
+    "clusters": 26
+  },
+  {
+    "districtId": 2429,
+    "name": "DEVBHOOMI DWARKA",
+    "schools": 865,
+    "teachers": 4543,
+    "students": 127490,
+    "blocks": 4,
+    "clusters": 67
+  },
+  {
+    "districtId": 2426,
+    "name": "TAPI",
+    "schools": 1052,
+    "teachers": 5071,
+    "students": 125348,
+    "blocks": 7,
+    "clusters": 68
+  },
+  {
+    "districtId": 2420,
+    "name": "NARMADA",
+    "schools": 897,
+    "teachers": 3850,
+    "students": 103581,
+    "blocks": 5,
+    "clusters": 66
+  },
+  {
+    "districtId": 2411,
+    "name": "PORBANDAR",
+    "schools": 498,
+    "teachers": 3417,
+    "students": 86762,
+    "blocks": 3,
+    "clusters": 35
+  },
+  {
+    "districtId": 2423,
+    "name": "THE DANGS",
+    "schools": 491,
+    "teachers": 2373,
+    "students": 62522,
+    "blocks": 3,
+    "clusters": 36
+  }
+]

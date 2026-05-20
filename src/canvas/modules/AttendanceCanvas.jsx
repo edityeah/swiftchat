@@ -2,6 +2,24 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, Users, Calendar } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 
+// ── Filter helpers ────────────────────────────────────────────────────────────
+// Students in STUDENTS_BY_CLASS have: { id, name, roll, risk }
+// There is no attendanceMark / submitted field on the static records, so we
+// use the best available proxy per filter case.
+function applyAttendanceFilter(students, filterMode) {
+  if (!filterMode) return students
+  if (filterMode === 'unmarked')
+    // No attendanceMark field → surface at-risk students as "needs attention"
+    return students.filter(s => s.risk)
+  if (filterMode === 'chronic_absent')
+    // No per-student attendance % on static records → use risk flag as proxy
+    return students.filter(s => s.risk)
+  if (filterMode === 'non_submitting')
+    // No submitted field → return first 6 as a visible sample
+    return students.slice(0, 6)
+  return students
+}
+
 // ── Data ─────────────────────────────────────────────────────────────────────
 
 const CLASSES = ['6-A', '6-B', '7-A', '7-B', '8-A', '8-B']
@@ -173,6 +191,9 @@ function StudentCard({ student, present, onToggle }) {
 export default function AttendanceCanvas({ context }) {
   const { showToast, closeCanvas } = useApp()
 
+  // Optional KPI drill-down filter mode (e.g. 'unmarked', 'chronic_absent', 'non_submitting')
+  const filterMode = context?.filter || null
+
   // The notification CTA can pass classId in any form ('8', 'Class 8', '6-B').
   // Normalise once on mount and again when the context flips.
   const initialClass = useMemo(() => resolveClassKey(context?.classId), [context?.classId])
@@ -183,6 +204,13 @@ export default function AttendanceCanvas({ context }) {
   const [submitted, setSubmitted] = useState(false)
 
   const students = getStudents(selectedClass)
+  // Filtered subset — only used for display when filterMode is active.
+  // The full `students` list is always passed to attendance state so toggles work.
+  const visibleStudents = useMemo(
+    () => filterMode ? applyAttendanceFilter(students, filterMode) : students,
+    [students, filterMode]
+  )
+
   const [attendance, setAttendance] = useState(() =>
     Object.fromEntries(students.map((s, i) => [s.id, i >= 2]))
   )
@@ -325,6 +353,13 @@ export default function AttendanceCanvas({ context }) {
         </div>
       </div>
 
+      {/* Filter banner */}
+      {filterMode && (
+        <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 text-[11.5px] text-amber-900 flex-shrink-0">
+          Filtered: {filterMode.replace(/_/g, ' ')} · {visibleStudents.length} of {students.length} students
+        </div>
+      )}
+
       {/* Mark all row */}
       <div className="flex items-center justify-between px-3.5 py-2 border-b border-bdr-light flex-shrink-0 bg-white">
         <span className="text-[12px] font-bold text-txt-secondary">
@@ -349,7 +384,7 @@ export default function AttendanceCanvas({ context }) {
       {/* Student grid */}
       <div className="flex-1 overflow-y-auto px-3.5 py-3 bg-surface-secondary">
         <div className="grid grid-cols-4 gap-2">
-          {students.map(student => (
+          {(filterMode ? visibleStudents : students).map(student => (
             <StudentCard
               key={student.id}
               student={student}

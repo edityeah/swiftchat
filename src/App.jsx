@@ -23,7 +23,7 @@ import PostsPage         from './pages/PostsPage'
 import CreatePostPage    from './pages/CreatePostPage'
 
 // Every chat bot ID that uses the generic ChatPage
-const CHAT_IDS = ['swift','xamta','att','ews','tmsg','catt','cschol','dbt','datt','warroom','parentbot']
+const CHAT_IDS = ['swift','xamta','att','ews','tmsg','catt','cschol','dbt','datt','warroom','parentbot','kpi']
 const AUTH_SCREENS = new Set(['splash','login','select_state','sso_redirect','sso_verifying','sso_ok','sso_fail','phone_entry','phone_otp'])
 
 // Static routes: id → component

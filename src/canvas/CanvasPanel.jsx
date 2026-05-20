@@ -1,5 +1,5 @@
 import React from 'react'
-import { X, ArrowLeft, MoreHorizontal } from 'lucide-react'
+import { X, ArrowLeft, MoreHorizontal, Maximize2, Minimize2 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import AttendanceCanvas  from './modules/AttendanceCanvas'
 import DashboardCanvas   from './modules/DashboardCanvas'
@@ -14,6 +14,11 @@ import WorksheetEditorCanvas   from './modules/WorksheetEditorCanvas'
 import StudentRosterCanvas     from './modules/StudentRosterCanvas'
 import AtRiskStudentsCanvas    from './modules/AtRiskStudentsCanvas'
 import ClassReportCanvas       from './modules/ClassReportCanvas'
+import ReportCardCanvas        from './modules/ReportCardCanvas'
+import KpiInsightCanvas        from './modules/KpiInsightCanvas'
+import EntityRegistryCanvas    from './modules/EntityRegistryCanvas'
+import TeacherAttendanceCanvas from './modules/TeacherAttendanceCanvas'
+import AttendanceDashboardCanvas from './modules/AttendanceDashboardCanvas'
 // Legacy canvas tabs (fallback for old chatId-based canvas)
 import RichTextEditor    from './RichTextEditor'
 import DataForm          from './DataForm'
@@ -40,6 +45,16 @@ const MODULE_META = {
   'class-report':        { icon: '📊', title: ctx => `${ctx.classLabel || `Class ${ctx.grade || 8}`} · Class Report` },
   pdf:         { icon: '📄', title: () => 'Generate PDF' },
   report:      { icon: '📋', title: ctx => ctx.scope === 'district' ? 'District Report' : 'Class Report' },
+  'report_card':  { icon: '📊', title: () => 'Report card' },
+  'kpi_insight':  { icon: '🎯', title: ctx => ctx.kpiId ? 'KPI insight' : 'KPI insight' },
+  'registry':     { icon: '📚', title: ctx => ctx.kind === 'teachers' ? 'Teachers registry' : ctx.kind === 'schools' ? 'Schools registry' : 'Districts registry' },
+  'teacher-attendance': { icon: '👩‍🏫', title: () => 'Teacher attendance' },
+  'attendance-dashboard': { icon: '📅', title: ctx =>
+    ctx.scope === 'state' ? 'Attendance — State level' :
+    ctx.scope === 'district' ? 'Attendance — District' :
+    ctx.scope === 'block' ? 'Attendance — Block' :
+    ctx.scope === 'cluster' ? 'Attendance — Cluster' :
+    ctx.scope === 'school' ? 'Attendance — School' : 'Attendance dashboard' },
   digivritti:  { icon: '🌸', title: ctx => {
     const scheme = ctx.scheme && ctx.scheme !== 'all' ? ` — ${SCHEME_TITLE[ctx.scheme] || ctx.scheme}` : ''
     if (ctx.view === 'apply')          return `DigiVritti${scheme} · New Application`
@@ -63,6 +78,13 @@ const LEGACY_TABS = [
 export default function CanvasPanel() {
   const { canvasOpen, closeCanvas, canvasContext } = useApp()
   const [legacyTab, setLegacyTab] = React.useState('editor')
+  const [expanded, setExpanded] = React.useState(false)
+
+  // Reset expanded state whenever the canvas closes (so the next open starts
+  // at the default panel width).
+  React.useEffect(() => {
+    if (!canvasOpen) setExpanded(false)
+  }, [canvasOpen])
 
   if (!canvasOpen) return null
 
@@ -71,13 +93,20 @@ export default function CanvasPanel() {
   const isModule = !!MODULE_META[ctx.type]
   const meta = isModule ? MODULE_META[ctx.type] : null
 
+  // Panel width: collapsed = right-side artifact panel; expanded = full chat
+  // area (everything to the right of the threads sidebar).
+  const panelWidth = expanded
+    ? 'w-full'
+    : 'w-full md:w-[60%] lg:w-[640px] xl:w-[720px] max-w-full'
+
   // Notifications canvas owns its own header — keep this panel a thin shell.
   if (isNotifications) {
     return (
       <>
         <div className="absolute inset-0 bg-black/25 z-40" onClick={closeCanvas} />
-        <div className="absolute inset-y-0 right-0 z-50 flex flex-col bg-white animate-canvas-slide overflow-hidden border-l border-bdr-light shadow-canvas
-                        w-full md:w-[60%] lg:w-[480px] xl:w-[520px] max-w-full">
+        <div className={`absolute inset-y-0 right-0 z-50 flex flex-col bg-white animate-canvas-slide overflow-hidden border-l border-bdr-light shadow-canvas ${
+          expanded ? 'w-full' : 'w-full md:w-[60%] lg:w-[480px] xl:w-[520px] max-w-full'
+        }`}>
           <NotificationCanvas
             initialView={ctx.view || 'list'}
             initialBroadcastPrefill={ctx.broadcastPrefill || null}
@@ -100,9 +129,9 @@ export default function CanvasPanel() {
       />
 
       {/* Panel — full-width on mobile, right-side artifact panel on tablet+
-          (so the SwiftChat chat thread stays visible on the left). */}
-      <div className="absolute inset-y-0 right-0 z-50 flex flex-col bg-white animate-canvas-slide overflow-hidden border-l border-bdr-light shadow-canvas
-                      w-full md:w-[60%] lg:w-[640px] xl:w-[720px] max-w-full">
+          (so the SwiftChat chat thread stays visible on the left). Expand
+          toggle in the header swaps to the full chat area width. */}
+      <div className={`absolute inset-y-0 right-0 z-50 flex flex-col bg-white animate-canvas-slide overflow-hidden border-l border-bdr-light shadow-canvas ${panelWidth}`}>
 
         {/* Header */}
         <div className="h-14 flex items-center gap-2 px-3 border-b border-bdr-light flex-shrink-0 bg-white">
@@ -139,6 +168,13 @@ export default function CanvasPanel() {
             </>
           )}
 
+          <button
+            onClick={() => setExpanded(e => !e)}
+            title={expanded ? 'Collapse' : 'Expand to full chat width'}
+            className="w-10 h-10 flex items-center justify-center rounded-full text-txt-secondary active:bg-surface-secondary transition-colors flex-shrink-0"
+          >
+            {expanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+          </button>
           <button className="w-10 h-10 flex items-center justify-center rounded-full text-txt-secondary active:bg-surface-secondary transition-colors flex-shrink-0">
             <MoreHorizontal size={20} />
           </button>
@@ -182,6 +218,11 @@ export default function CanvasPanel() {
               {ctx.type === 'pdf'         && <PDFCanvas         context={ctx} />}
               {ctx.type === 'report'      && <ReportCanvas      context={ctx} />}
               {ctx.type === 'digivritti'  && <DigiVrittiCanvas  context={ctx} />}
+              {ctx.type === 'report_card' && <ReportCardCanvas />}
+              {ctx.type === 'kpi_insight' && <KpiInsightCanvas context={ctx} />}
+              {ctx.type === 'registry'    && <EntityRegistryCanvas context={ctx} />}
+              {ctx.type === 'teacher-attendance' && <TeacherAttendanceCanvas context={ctx} />}
+              {ctx.type === 'attendance-dashboard' && <AttendanceDashboardCanvas context={ctx} />}
             </>
           ) : (
             <>

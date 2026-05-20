@@ -1,6 +1,7 @@
 import React from 'react'
 import { useApp } from '../context/AppContext'
 import Logo from './Logo'
+import KpiInsightCard from './kpi/KpiInsightCard'
 
 function ActionBtn({ label, chatId, action, canvas }) {
   const { navigate, showToast, openCanvas } = useApp()
@@ -38,17 +39,21 @@ export default function ChatBubble({ message }) {
         </div>
       )}
       <div>
-        <div
-          className={`px-3 py-2.5 rounded-2xl text-[13.5px] leading-[1.55] ${
-            isBot
-              ? 'bg-white text-txt-primary rounded-bl-[4px] shadow-card'
-              : 'bg-primary text-white rounded-br-[4px]'
-          }`}
-          {...(isBot
-            ? { dangerouslySetInnerHTML: { __html: message.html } }
-            : { children: message.text })}
-        />
-        {isBot && message.actions?.length > 0 && (
+        {message.kind === 'kpi_insight' ? (
+          <KpiInsightCard data={message.kpi} />
+        ) : (
+          <div
+            className={`px-3 py-2.5 rounded-2xl text-[13.5px] leading-[1.55] ${
+              isBot
+                ? 'bg-white text-txt-primary rounded-bl-[4px] shadow-card'
+                : 'bg-primary text-white rounded-br-[4px]'
+            }`}
+            {...(isBot
+              ? { dangerouslySetInnerHTML: { __html: message.html } }
+              : { children: message.text })}
+          />
+        )}
+        {isBot && message.kind !== 'kpi_insight' && message.actions?.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {message.actions.map((a, i) => <ActionBtn key={i} {...a} />)}
           </div>

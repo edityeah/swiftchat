@@ -29,3 +29,11 @@ swiftchat-design-system.md
 demo.jsx
 server/swiftchat-ai/.env.example
 server/swiftchat-ai/rag/schema.sql
+.superpowers/
+
+# Source registries — confidential, never commit
+*.csv
+StudentRegistry_*
+teacher_*.csv
+school_*.csv
+student_*.csv

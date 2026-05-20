@@ -38,14 +38,40 @@ function dropoutSignal(student) {
   return 'Monitoring'
 }
 
+// ── KPI filter helpers ────────────────────────────────────────────────────────
+// AT_RISK_STUDENTS shape: { name, grade, attendance, score, risk, reason, days }
+// Subject scores (math/sci/guj/level) don't exist — use score+risk as proxy.
+const SCHOOL_LEVEL_FILTERS = new Set(['schools_below_benchmark', 'low_performing_schools'])
+
+function applyAtRiskFilter(students, filterMode, threshold) {
+  if (!filterMode) return students
+  const thr = threshold ?? 40
+  if (filterMode === 'chronic_absent')        return students.filter(s => s.attendance < 60 || s.risk === 'high')
+  if (filterMode === 'below_proficiency')     return students.filter(s => s.score < thr)
+  if (filterMode === 'assessment_absent')     return students.filter(s => s.score == null)
+  if (filterMode === 'ews_pending_followup')  return students.filter(s => s.risk === 'high')
+  if (filterMode === 'module_incomplete')     return students.slice(0, 6)
+  if (filterMode === 'identified_remediation')return students.filter(s => s.risk === 'high' || s.score < 50)
+  if (filterMode === 'remediation_not_started')return students.filter(s => s.risk === 'high' || s.score < 50)
+  if (SCHOOL_LEVEL_FILTERS.has(filterMode))   return students  // handled via banner
+  return students
+}
+
 export default function AtRiskStudentsCanvas({ context }) {
   const { closeCanvas, openCanvas, openNotificationsCanvas, showToast } = useApp()
   const focusGrade = context?.grade || 8
+  const filterMode = context?.filter || null
+  const threshold  = context?.threshold ?? null
 
-  const students = useMemo(() => {
+  const allStudents = useMemo(() => {
     const list = (AT_RISK_STUDENTS || []).filter(s => !focusGrade || s.grade === focusGrade)
     return list.length ? list : (AT_RISK_STUDENTS || [])
   }, [focusGrade])
+
+  const students = useMemo(
+    () => applyAtRiskFilter(allStudents, filterMode, threshold),
+    [allStudents, filterMode, threshold]
+  )
 
   const counts = useMemo(() => {
     const by = { Urgent: 0, High: 0, Medium: 0, Low: 0 }
@@ -99,6 +125,15 @@ export default function AtRiskStudentsCanvas({ context }) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Filter banner */}
+      {filterMode && (
+        <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 text-[11.5px] text-amber-900 flex-shrink-0">
+          {SCHOOL_LEVEL_FILTERS.has(filterMode)
+            ? 'School-level filter; using class-level sample as placeholder.'
+            : `Filtered: ${filterMode.replace(/_/g, ' ')} · ${students.length} of ${allStudents.length} students`}
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-4 py-3 border-b border-bdr-light bg-white flex-shrink-0">
         <div className="flex items-start gap-3">

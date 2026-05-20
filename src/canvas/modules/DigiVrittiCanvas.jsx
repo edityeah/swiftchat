@@ -850,6 +850,156 @@ function ApplyView({ context }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// NEW KPI DRILL-DOWN VIEWS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Mock data for grievances view
+const MOCK_GRIEVANCES = [
+  { id: 'GR-001', school: 'GPS Mehsana',    issue: 'Student Aadhaar mismatch — name differs from bank record',             opened: '2025-05-01', status: 'Open',     repeat: true  },
+  { id: 'GR-002', school: 'GPS Vijapur',    issue: 'Payment failed — bank account closed',                                  opened: '2025-05-03', status: 'Open',     repeat: false },
+  { id: 'GR-003', school: 'GPS Kheralu',    issue: 'Document upload failing on slow connectivity',                          opened: '2025-05-06', status: 'Resolved', repeat: true  },
+  { id: 'GR-004', school: 'GPS Satlasana',  issue: 'Wrong scheme selected during submission — needs correction',            opened: '2025-05-08', status: 'Open',     repeat: false },
+  { id: 'GR-005', school: 'GPS Becharaji',  issue: 'Teacher account locked after 5 failed login attempts',                 opened: '2025-05-10', status: 'Open',     repeat: false },
+]
+
+const FONT_DV = 'Montserrat, sans-serif'
+const CD = {
+  textPrimary: '#0E0E0E', textSecondary: '#7383A5',
+  borderDefault: '#D5D8DF', surface: '#FFFFFF',
+  success: '#00BA34', successText: '#007B22', successBg: '#D4F5DC',
+  warning: '#F8B200', warningText: '#9A6500', warningBg: '#FFF3CC',
+  error: '#EB5757', errorText: '#C0392B', errorBg: '#FDEAEA',
+  brand: '#386AF6', brandSubtle: '#EEF2FF',
+}
+
+function GrievancesView({ context }) {
+  const { closeCanvas } = useApp()
+  const filterRepeat = context?.filter === 'repeat'
+  const rows = filterRepeat ? MOCK_GRIEVANCES.filter(g => g.repeat) : MOCK_GRIEVANCES
+  return (
+    <div style={{ padding: 16, fontFamily: FONT_DV, color: CD.textPrimary }}>
+      {/* Filter banner */}
+      <div style={{
+        padding: '8px 12px', marginBottom: 12, borderRadius: 8,
+        background: '#FFFBEB', border: '1px solid #FDE68A',
+        fontSize: 11.5, color: '#92400E',
+      }}>
+        {filterRepeat
+          ? `Filtered: repeat grievances · ${rows.length} of ${MOCK_GRIEVANCES.length} items`
+          : `Showing all grievances · ${rows.length} items`}
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Grievances</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map(g => {
+          const isOpen = g.status === 'Open'
+          return (
+            <div key={g.id} style={{
+              border: `1px solid ${CD.borderDefault}`, borderRadius: 12,
+              background: CD.surface, padding: '10px 12px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: CD.textPrimary }}>{g.id}</span>
+                <span style={{ fontSize: 11, color: CD.textSecondary, flex: 1 }}>{g.school}</span>
+                <span style={{
+                  padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 600,
+                  background: isOpen ? CD.errorBg : CD.successBg,
+                  color: isOpen ? CD.errorText : CD.successText,
+                }}>{g.status}</span>
+              </div>
+              <div style={{ fontSize: 12, color: CD.textPrimary, marginBottom: 2 }}>{g.issue}</div>
+              <div style={{ fontSize: 11, color: CD.textSecondary }}>Opened {g.opened}{g.repeat ? ' · repeat' : ''}</div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <button onClick={closeCanvas} style={{
+          flex: 1, padding: '12px 16px', borderRadius: 999,
+          border: `1.5px solid ${CD.borderDefault}`, background: CD.surface,
+          color: CD.textSecondary, fontSize: 14, fontWeight: 600,
+          fontFamily: FONT_DV, cursor: 'pointer',
+        }}>Close</button>
+      </div>
+    </div>
+  )
+}
+
+function PendingMappingView({ context }) {
+  const { closeCanvas } = useApp()
+  const MOCK_UNMAPPED = [
+    { id: 'STU-0901', name: 'Meera Vasava',    school: 'GPS Mehsana',   reason: 'Aadhaar not linked to DigiVritti DB' },
+    { id: 'STU-0902', name: 'Nisha Parmar',    school: 'GPS Vijapur',   reason: 'Mother name mismatch across registries' },
+    { id: 'STU-0903', name: 'Pooja Trivedi',   school: 'GPS Kheralu',   reason: 'Grade/class mismatch' },
+    { id: 'STU-0904', name: 'Reshma Solanki',  school: 'GPS Satlasana', reason: 'Duplicate entry — needs merge' },
+    { id: 'STU-0905', name: 'Swati Rajput',    school: 'GPS Becharaji', reason: 'Bank account not verified' },
+  ]
+  return (
+    <div style={{ padding: 16, fontFamily: FONT_DV, color: CD.textPrimary }}>
+      <div style={{
+        padding: '8px 12px', marginBottom: 12, borderRadius: 8,
+        background: '#FFFBEB', border: '1px solid #FDE68A',
+        fontSize: 11.5, color: '#92400E',
+      }}>
+        Filtered: pending mapping · {MOCK_UNMAPPED.length} students need attention
+      </div>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>Students with pending mapping</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {MOCK_UNMAPPED.map(s => (
+          <div key={s.id} style={{
+            border: `1px solid ${CD.borderDefault}`, borderRadius: 12,
+            background: CD.surface, padding: '10px 12px',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
+            <div style={{ fontSize: 11, color: CD.textSecondary }}>{s.school} · {s.id}</div>
+            <div style={{
+              marginTop: 4, padding: '3px 8px', borderRadius: 6, display: 'inline-block',
+              background: CD.warningBg, color: CD.warningText, fontSize: 11, fontWeight: 500,
+            }}>{s.reason}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <button onClick={closeCanvas} style={{
+          flex: 1, padding: '12px 16px', borderRadius: 999,
+          border: `1.5px solid ${CD.borderDefault}`, background: CD.surface,
+          color: CD.textSecondary, fontSize: 14, fontWeight: 600,
+          fontFamily: FONT_DV, cursor: 'pointer',
+        }}>Close</button>
+      </div>
+    </div>
+  )
+}
+
+function SamagraView({ context }) {
+  const { closeCanvas } = useApp()
+  return (
+    <div style={{ padding: 16, fontFamily: FONT_DV, color: CD.textPrimary }}>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Samagra Shiksha — fund utilisation</div>
+      <div style={{ fontSize: 12, color: CD.textSecondary, marginBottom: 16 }}>Central scheme fund tracking placeholder.</div>
+      <div style={{
+        border: `1px solid ${CD.borderDefault}`, borderRadius: 12,
+        background: CD.surface, padding: 16, textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 36, fontWeight: 700, color: CD.brand }}>78%</div>
+        <div style={{ fontSize: 13, color: CD.textSecondary, marginTop: 4 }}>Fund utilisation rate</div>
+        <div style={{
+          marginTop: 8, padding: '6px 12px', borderRadius: 8, display: 'inline-block',
+          background: CD.warningBg, color: CD.warningText, fontSize: 11, fontWeight: 500,
+        }}>Mock value — real numbers wire later</div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+        <button onClick={closeCanvas} style={{
+          flex: 1, padding: '12px 16px', borderRadius: 999,
+          border: `1.5px solid ${CD.borderDefault}`, background: CD.surface,
+          color: CD.textSecondary, fontSize: 14, fontWeight: 600,
+          fontFamily: FONT_DV, cursor: 'pointer',
+        }}>Close</button>
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Top-level dispatcher — switches view based on context.
 // ─────────────────────────────────────────────────────────────────────────────
 import {
@@ -865,10 +1015,14 @@ export default function DigiVrittiCanvas({ context = {} }) {
   if (view === 'student-select')  return <StudentSelectView context={context} />
   if (view === 'opt-out')         return <OptOutView        context={context} />
   if (view === 'review')          return <ReviewView        context={context} />
-  if (view === 'payment-queue')   return <PaymentQueueView  context={context} />
+  if (view === 'payment-queue')   return <PaymentQueueView  context={{ ...context, filter: context.status || context.filter }} />
   if (view === 'analytics')       return <AnalyticsView     context={context} />
   if (view === 'ai-result')       return <AIResultCanvas    context={context} />
   if (view === 'ai-deep-dive')    return <AIDeepDiveCanvas  context={context} />
+  // KPI drill-down views
+  if (view === 'pending_mapping') return <PendingMappingView context={context} />
+  if (view === 'grievances')      return <GrievancesView    context={context} />
+  if (view === 'samagra')         return <SamagraView       context={context} />
   if (view === 'edit') {
     return <EditView
       context={context}

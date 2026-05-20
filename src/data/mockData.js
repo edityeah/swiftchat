@@ -24,6 +24,7 @@ export const DEMO_SSO_USERS = [
   { stateId: 'SEC4001', password: 'Demo@123', name: 'Nidhi Shah',    role: 'state_secretary', badge: 'State Secretary', org: 'State — Gujarat',    school: null,          district: null,        initials: 'NS', color: '#DC2626', emoji: '🏛️' },
   { stateId: 'CRC1001', password: 'Demo@123', name: 'Mehul Parmar',  role: 'crc',             badge: 'CRC · Cluster Approver', org: 'Cluster MADHAPAR · Kachchh', school: null,    district: 'Kachchh',   initials: 'MP', color: '#0EA5E9', emoji: '✅', cluster: 'MADHAPAR', approverCode: 'APR001' },
   { stateId: 'PFMS001', password: 'Demo@123', name: 'Farida Shaikh', role: 'pfms',            badge: 'PFMS · Payment Officer', org: 'PFMS — Gujarat',           school: null,    district: null,        initials: 'FS', color: '#F97316', emoji: '💰' },
+  { stateId: 'BEO5001', password: 'Demo@123', name: 'Hetal Vyas',   role: 'beo',             badge: 'BEO',             org: 'Mehsana Block Education Office', school: null,    district: 'Mehsana',   initials: 'HV', color: '#0F766E', emoji: '🏢', block: 'Mehsana' },
 ]
 
 export const DEMO_PHONE_USER = {
@@ -68,11 +69,18 @@ function genStudents(grade, count = 32) {
   return out
 }
 
+// Class sizes chosen so the school totals exactly match SCHOOL_INFO
+// (342 students across grades 1-8 — Prathmik Shala = primary).
+//   1: 45  2: 42  3: 40  4: 44  5: 42  6: 44  7: 42  8: 43  = 342
 export const STUDENTS = {
-  3: genStudents(3, 32),
-  5: genStudents(5, 30),
-  6: genStudents(6, 34),
-  8: genStudents(8, 30),
+  1: genStudents(1, 45),
+  2: genStudents(2, 42),
+  3: genStudents(3, 40),
+  4: genStudents(4, 44),
+  5: genStudents(5, 42),
+  6: genStudents(6, 44),
+  7: genStudents(7, 42),
+  8: genStudents(8, 43),
 }
 
 // ── Performance data (auto-derived from students) ────────────────────────────
@@ -375,5 +383,14 @@ export const USER_PROFILES = {
     phone: '9876546001', email: 'farida.shaikh@pfms.nic.in',
     dpdpaTier: 'Tier 3 — Official', sessionTTL: '12 hrs', lastLogin: '08/04/2026, 8:12 AM',
     tokenOrigin: 'PFMS SSO (SAML)', initials: 'FS', color: '#F97316',
+  },
+  beo: {
+    name: 'Hetal Vyas', stateId: 'BEO5001', role: 'beo', badge: 'BEO',
+    org: 'Mehsana Block Education Office', school: null,
+    district: 'Mehsana', scope: 'Block — Mehsana', employeeId: 'EMP-GJ-BEO-001',
+    phone: '9876547001', email: 'hetal.vyas@deo.gujarat.gov.in',
+    dpdpaTier: 'Tier 3 — Official', sessionTTL: '12 hrs', lastLogin: '08/04/2026, 8:25 AM',
+    tokenOrigin: 'Gujarat SSO (OIDC)', initials: 'HV', color: '#0F766E',
+    block: 'Mehsana',
   },
 }

@@ -6,6 +6,7 @@
 
 import { registerRemoteInterpreter } from './aiClient.js'
 import { groqInterpreter, isRemoteEnabled } from './groqInterpreter.js'
+import '../kpi/kpiNlp.js'
 
 if (isRemoteEnabled()) {
   registerRemoteInterpreter(groqInterpreter)
