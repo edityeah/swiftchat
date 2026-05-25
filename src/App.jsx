@@ -4,6 +4,8 @@ import Toast from './components/Toast'
 import CallOverlay from './components/CallOverlay'
 import CanvasPanel from './canvas/CanvasPanel'
 import NotificationToast from './components/notifications/NotificationToast'
+import { VoiceCallProvider } from './voice/VoiceCallProvider'
+import VoiceCallOverlay from './voice/VoiceCallOverlay'
 
 import SplashPage        from './pages/SplashPage'
 import LoginPage         from './pages/LoginPage'
@@ -75,15 +77,24 @@ function AppRoutes() {
   const isFullScreen = isAuth || screen === 'home' || screen === 'posts' || screen === 'create_post'
 
   return (
-    <div className={`fixed inset-0 flex items-center justify-center overflow-hidden ${isFullScreen ? '' : 'bg-[#e8eaf6]'}`}>
+    <div className={`fixed inset-0 flex items-center justify-center overflow-clip ${isFullScreen ? '' : 'bg-[#e8eaf6]'}`}>
       {/*
         Only transition the shadow on full-screen ↔ framed route changes.
         Previously `transition-all duration-300` was animating the WIDTH
         too, which made content visually squish / clip during the 300ms
         switch (e.g. when going from sso_ok → home, or home → profile).
         Width is now instant; only the soft shadow crossfades.
+
+        IMPORTANT: use `overflow-clip` (not `overflow-hidden`). Inactive
+        screens are slid off via `translate-x-full`, and even though they
+        sit at translateX(100%) the browser still counts them in
+        scrollWidth. With `overflow-hidden`, scrollLeft can drift (e.g.
+        16px) from in-flight transitions or browser quirks, causing the
+        whole layout to appear shifted left by that amount. `overflow-clip`
+        creates no scroll container at all — no scrollLeft is ever
+        possible, so the layout cannot drift.
       */}
-      <div className={`relative h-full overflow-hidden transition-shadow duration-300 bg-white ${
+      <div className={`relative h-full overflow-clip transition-shadow duration-300 bg-white ${
         isFullScreen
           ? 'w-full'
           : 'w-full max-w-[420px] shadow-[0_0_40px_rgba(0,0,0,0.15)]'
@@ -95,6 +106,7 @@ function AppRoutes() {
         <CanvasPanel />
         <Toast />
         <NotificationToast />
+        <VoiceCallOverlay />
       </div>
     </div>
   )
@@ -103,7 +115,9 @@ function AppRoutes() {
 export default function App() {
   return (
     <AppProvider>
-      <AppRoutes />
+      <VoiceCallProvider>
+        <AppRoutes />
+      </VoiceCallProvider>
     </AppProvider>
   )
 }

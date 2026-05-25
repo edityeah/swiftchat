@@ -304,8 +304,431 @@ function tryTeacherQuery(q) {
   }
 }
 
+// ─── Additional matchers for common askAi prompts ─────────────────────────
+
+function tryHighestRiskDistricts(q) {
+  if (!/(highest risk|risk.*district|risky districts|risk top)/i.test(q)) return null
+  return {
+    card: {
+      type: 'bar_chart',
+      title: 'Districts with highest risk',
+      orient: 'horizontal',
+      color: 'rose',
+      unit: '% risk',
+      annotation: '5 districts have distinct, high-priority risks needing different interventions.',
+      data: [
+        { label: 'Dahod',        value: 90.9, color: 'rose' },
+        { label: 'Banaskantha',  value: 78.4, color: 'amber' },
+        { label: 'Dang',         value: 60.0, color: 'amber' },
+        { label: 'Kachchh',      value: 52.1, color: 'sky' },
+        { label: 'Panchmahals',  value: 47.2, color: 'sky' },
+      ],
+      chips: [
+        'Why is Dahod at 90.9%?',
+        'Open district comparison',
+        'Compare risk types across districts',
+      ],
+    },
+  }
+}
+
+function tryLowestPaymentSuccess(q) {
+  if (!/(lowest payment|payment success|success rate.*low|payment.*fail|payment.*block)/i.test(q)) return null
+  return {
+    card: {
+      type: 'bar_chart',
+      title: 'Districts with lowest payment success rate',
+      orient: 'horizontal',
+      color: 'rose',
+      unit: '% success',
+      annotation: '5 districts are below 70% payment success. Common cause: Aadhaar mismatch + bank validation.',
+      data: [
+        { label: 'Dahod',       value: 62.4, color: 'rose' },
+        { label: 'Dang',        value: 64.1, color: 'rose' },
+        { label: 'Kachchh',     value: 66.8, color: 'amber' },
+        { label: 'Banaskantha', value: 68.3, color: 'amber' },
+        { label: 'Panchmahals', value: 69.5, color: 'amber' },
+      ],
+      chips: [
+        'Why are payments blocked?',
+        'Show retry workflow',
+        'Top 5 districts by payment success',
+      ],
+    },
+  }
+}
+
+function tryXamtaFollowup(q) {
+  if (!/(xamta|data.entry|follow.?up.*xamta|xamta.*follow|data.entry.*follow)/i.test(q)) return null
+  return {
+    card: {
+      type: 'bar_chart',
+      title: 'Districts needing XAMTA data-entry follow-up',
+      orient: 'horizontal',
+      color: 'amber',
+      unit: '% pending',
+      annotation: 'Pending XAMTA scans by district. Schools below 50% completion need a BRC nudge today.',
+      data: [
+        { label: 'Banaskantha',  value: 58.4 },
+        { label: 'Kachchh',      value: 52.0 },
+        { label: 'Panchmahals',  value: 47.5 },
+        { label: 'Dahod',        value: 42.1 },
+        { label: 'Dang',         value: 38.8 },
+      ],
+      chips: [
+        'Show schools below 50% XAMTA',
+        'Send broadcast to BRC officers',
+        'XAMTA trend over last 4 weeks',
+      ],
+    },
+  }
+}
+
+function tryNamoComparison(q) {
+  if (!/(namo lakshmi.*namo saraswati|namo saraswati.*namo lakshmi|compare.*namo|namo.*performance|scheme.*compare)/i.test(q)) return null
+  return {
+    card: {
+      type: 'donut_chart',
+      title: 'Namo Lakshmi vs Namo Saraswati — beneficiaries',
+      data: [
+        { label: 'Namo Lakshmi (approved)',   value: 34572, color: '#10B981' },
+        { label: 'Namo Lakshmi (blocked)',    value: 1128,  color: '#F43F5E' },
+        { label: 'Namo Saraswati (approved)', value: 21840, color: '#386AF6' },
+        { label: 'Namo Saraswati (pending)',  value: 612,   color: '#F59E0B' },
+      ],
+      annotation: 'Namo Lakshmi serves ~1.6× the Namo Saraswati base; success rates similar (~97%).',
+      chips: [
+        'Why are Namo Lakshmi payments blocked?',
+        'Namo Saraswati district-wise breakdown',
+        'Combined disbursement trend',
+      ],
+    },
+  }
+}
+
+function tryScholarshipFunnel(q) {
+  if (!/(scholarship.*funnel|funnel.*scholarship|state.level scholarship|application.*funnel)/i.test(q)) return null
+  return {
+    card: {
+      type: 'bar_chart',
+      title: 'State-level scholarship funnel',
+      orient: 'horizontal',
+      color: 'primary',
+      unit: 'applications',
+      annotation: '5-stage funnel from application to disbursement. Biggest drop: documents → approval.',
+      data: [
+        { label: 'Applied',          value: 48200 },
+        { label: 'Documents OK',     value: 39600 },
+        { label: 'CRC approved',     value: 36800 },
+        { label: 'BEO/DEO approved', value: 35100 },
+        { label: 'Disbursed',        value: 34572 },
+      ],
+      chips: [
+        'Why do documents fail validation?',
+        'CRC approval bottlenecks',
+        'Disbursement trend last 6 months',
+      ],
+    },
+  }
+}
+
+function tryTopActions(q) {
+  if (!/(top \d+.*action|state action|priority action|action.*week|top.*priorit)/i.test(q)) return null
+  return {
+    card: {
+      type: 'info',
+      tone: 'insight',
+      title: 'Top 3 state actions this week',
+      body: 'Based on this week\'s KPI deltas across attendance, scholarship and grievances:',
+      bullets: [
+        '🔴 Escalate Dahod payment-success cleanup — 4,780 stuck applications; potential ₹9 Cr unblocked.',
+        '🟡 Broadcast XAMTA reminder to Banaskantha + Kachchh BRC — 58% and 52% pending respectively.',
+        '🟢 Replicate Surendranagar attendance playbook to bottom-5 districts (Aravalli, Botad, Gandhinagar).',
+      ],
+      chips: [
+        'Open district comparison',
+        'Create state notification',
+        'Why is Dahod payment-success low?',
+      ],
+    },
+  }
+}
+
+// ─── Cross-referenced with VSK KPI Framework (Iteration-1) ─────────────────
+// Each matcher below corresponds to a query in
+// Swift Insight 3.0 - KPI Review - Iteration-1.xlsx that maps to one or
+// more KPIs in the Gujarat VSK KPI Framework. The list is intentionally
+// scoped — only queries with a strong VSK cross-reference are simulated.
+
+// #1 — "Analyze the attendance scenario in the state for the upcoming review"
+//   VSK A1: Attendance %, Chronic absentees, Reporting compliance
+function tryAttendanceScenario(q) {
+  if (!/(attendance scenario|attendance.*state|state.*attendance|review.*attendance|attendance.*review)/i.test(q)) return null
+  return {
+    card: {
+      type: 'kpi_grid',
+      title: 'State attendance scenario — today',
+      annotation: 'Snapshot for the review meeting. Drill into any tile for district / block breakdown.',
+      items: [
+        { label: "Today's attendance",     value: '85.4%', delta: '−2.6 pts vs last week', color: 'amber' },
+        { label: 'Chronic absentees',      value: '4,820', delta: '+312 vs last month',     color: 'rose'  },
+        { label: 'Schools below benchmark',value: '184',   delta: '+12 vs last week',       color: 'rose'  },
+        { label: 'Teacher attendance',     value: '92.1%', delta: '−0.8 pts',               color: 'emerald' },
+        { label: 'Schools reported today', value: '93%',   delta: 'Target 95%',             color: 'amber' },
+        { label: 'Districts in red',       value: '6 / 33',delta: 'vs 4 last week',         color: 'rose'  },
+      ],
+      chips: [
+        'Top 5 districts by attendance',
+        'Bottom 5 districts by attendance',
+        'Schools that haven\'t submitted today',
+        '7-day attendance trend',
+      ],
+    },
+  }
+}
+
+// #2 — "Identify the 3 most poorly performing hilly districts and reasons"
+//   VSK A1 + A2 + A5
+function tryHillyDistrictsBottom(q) {
+  if (!/(hilly|hill.*district|poorly.performing.*hilly|hill.*poor|hilly.*reason)/i.test(q)) return null
+  return {
+    card: {
+      type: 'bar_chart',
+      title: '3 poorest-performing hilly districts',
+      orient: 'horizontal',
+      color: 'rose',
+      unit: '% composite (attendance + LEP)',
+      annotation: 'Composite score combining attendance, LEP proficiency, and quality benchmark. Common drivers: distance to school, teacher vacancies, monsoon access.',
+      data: [
+        { label: 'Dang',         value: 58.4, color: 'rose' },
+        { label: 'Kachchh',      value: 62.8, color: 'rose' },
+        { label: 'Chhotaudepur', value: 65.1, color: 'amber' },
+      ],
+      chips: [
+        'Why is Dang under-performing?',
+        'Compare hilly vs plains districts',
+        'Send broadcast to hilly BEOs',
+        'Open intervention plan',
+      ],
+    },
+  }
+}
+
+// #12 — "State's current compliance rate for functional toilets / water / electricity"
+//   VSK A5: GSQAC score (Quality)
+function tryInfraCompliance(q) {
+  if (!/(toilet|drinking water|electricity|infra.*compliance|infrastructure.*compliance|functional.*toilet)/i.test(q)) return null
+  return {
+    card: {
+      type: 'bar_chart',
+      title: 'Infrastructure compliance — state',
+      orient: 'horizontal',
+      color: 'sky',
+      unit: '% schools compliant',
+      annotation: 'Drinking water and electricity near saturation; functional toilets the biggest gap (5,400 schools below standard).',
+      data: [
+        { label: 'Drinking water',     value: 98.2 },
+        { label: 'Electricity',        value: 96.7 },
+        { label: 'Boundary wall',      value: 89.3 },
+        { label: 'Functional toilets', value: 90.3 },
+        { label: 'Ramps (CWSN)',       value: 82.6 },
+        { label: 'Internet',           value: 76.1 },
+      ],
+      chips: [
+        'Schools with broken toilets',
+        'Districts below 90% on toilets',
+        'Compare with last cycle',
+        'Unspent infrastructure grants',
+      ],
+    },
+  }
+}
+
+// #18 — "State/District average LEP performance by grade and subject"
+//   VSK A2: Proficiency %, ORF/FLN improvement
+function tryLepByGradeSubject(q) {
+  if (!/(lep.*grade|lep.*subject|lep performance|grade.*subject|average.*lep)/i.test(q)) return null
+  return {
+    card: {
+      type: 'data_table',
+      title: 'State LEP proficiency — last assessment cycle',
+      annotation: 'Class 3 is below 60% in Math and Science — strongest case for FLN intervention.',
+      columns: ['Grade', 'Math', 'Science', 'English', 'Gujarati'],
+      rows: [
+        ['Class 3',  '58%', '54%', '67%', '78%'],
+        ['Class 5',  '62%', '60%', '69%', '76%'],
+        ['Class 8',  '66%', '64%', '71%', '74%'],
+        ['Class 10', '63%', '61%', '70%', '72%'],
+      ],
+      chips: [
+        'Top 5 districts in Math Class 3',
+        'Trend over last 3 cycles',
+        'Bottom 5 districts',
+        'Open FLN intervention plan',
+      ],
+    },
+  }
+}
+
+// #19 — "Top and bottom 5 districts/blocks/schools by LEP score"
+//   VSK A2: Proficiency %, Students below proficiency
+function tryTopBottomLep(q) {
+  if (!/(top.*lep|bottom.*lep|lep.*top|lep.*bottom|districts.*lep|lep.*district)/i.test(q)) return null
+  return {
+    card: {
+      type: 'bar_chart',
+      title: 'Districts by LEP score — last cycle',
+      orient: 'horizontal',
+      color: 'primary',
+      unit: '% proficient',
+      annotation: '17 pp gap between best (Mehesana) and worst (Dahod). Top three follow same teacher-attendance pattern.',
+      data: [
+        { label: 'Mehesana',     value: 78.1, color: 'emerald' },
+        { label: 'Surendranagar',value: 74.6, color: 'emerald' },
+        { label: 'Anand',        value: 73.2, color: 'emerald' },
+        { label: '… mid 28 districts …', value: 65.4, color: 'slate' },
+        { label: 'Banaskantha',  value: 62.1, color: 'amber' },
+        { label: 'Kachchh',      value: 61.0, color: 'amber' },
+        { label: 'Dahod',        value: 61.1, color: 'rose' },
+      ],
+      chips: [
+        'By grade and subject',
+        'Why is Mehesana the top performer?',
+        'Bottom-5 deep dive',
+        'Generate state notification',
+      ],
+    },
+  }
+}
+
+// #21 — "Schools with LEP score < threshold AND critical TSR/infra/attendance"
+//   VSK A1 + A2 + A5 — multi-issue at-risk schools
+function tryMultiIssueSchools(q) {
+  if (!/(low lep.*critical|lep.*infra.*attendance|multi.*issue|critical.*school|equity.*gap.*school|targeted support)/i.test(q)) return null
+  return {
+    card: {
+      type: 'data_table',
+      title: 'Schools below LEP threshold + critical attendance/infra',
+      annotation: '142 schools meet ALL three criteria: LEP < 60%, attendance < 70%, infra score below state average. Highest concentration in Dahod and Banaskantha.',
+      columns: ['School', 'Block', 'LEP %', 'Att. %', 'Infra'],
+      rows: [
+        ['GPS Khedbrahma',     'Khedbrahma',  '52%', '64%', 'D'],
+        ['GPS Limkheda',       'Limkheda',    '54%', '66%', 'D'],
+        ['GPS Devgadbaria',    'Devgadbaria', '55%', '68%', 'C'],
+        ['GPS Garbada',        'Garbada',     '57%', '69%', 'D'],
+        ['GPS Sanjeli',        'Sanjeli',     '58%', '67%', 'C'],
+        ['… 137 more rows',    '',            '',    '',    ''  ],
+      ],
+      chips: [
+        'Show all 142 schools',
+        'Group by block',
+        'Open intervention plan',
+        'Notify DEOs',
+      ],
+    },
+  }
+}
+
+// #26 — "% of schools submitted all required data (attendance, infra, LEP)"
+//   VSK A1 #4 Reporting compliance + A6 #27 Same-day reporting
+function tryDataSubmissionCoverage(q) {
+  if (!/(submitted.*data|data.*submit|submission.*rate|required data|reporting.*complete|all required)/i.test(q)) return null
+  return {
+    card: {
+      type: 'donut_chart',
+      title: 'Data submission coverage — latest cycle',
+      annotation: '93.4% of schools have submitted all three required streams (attendance, infra, LEP). 3,672 schools have at least one stream missing.',
+      data: [
+        { label: 'All three submitted',  value: 51940, color: '#10B981' },
+        { label: 'Two submitted',        value: 2380,  color: '#F59E0B' },
+        { label: 'One submitted',        value: 891,   color: '#EF4444' },
+        { label: 'None submitted',       value: 401,   color: '#DC2626' },
+      ],
+      chips: [
+        'Schools missing attendance only',
+        'Schools missing LEP only',
+        'By district — submission rate',
+        'Send reminder broadcast',
+      ],
+    },
+  }
+}
+
+// #27 — "Schools with missing or anomalous data"
+//   VSK A6 #29 Pending issues + #30 Repeat issues
+function tryAnomalousSchools(q) {
+  if (!/(anomalous|anomaly|missing data|extreme value|suspicious entry|data.*anomal)/i.test(q)) return null
+  return {
+    card: {
+      type: 'data_table',
+      title: 'Schools with missing or anomalous data — latest cycle',
+      annotation: '218 schools flagged. Most common issue: attendance > 100% (data-entry typos). 41 are repeat offenders.',
+      columns: ['School', 'District', 'Issue', 'Last update'],
+      rows: [
+        ['GPS Khedbrahma',  'Sabarkantha', 'Attendance 104%',           '2 days ago'],
+        ['GPS Bayad',       'Aravalli',    'LEP scores all 100%',       '1 day ago' ],
+        ['GPS Modasa',      'Aravalli',    'Missing infra updates ×3',  '5 days ago'],
+        ['GPS Talod',       'Sabarkantha', 'No attendance for 7 days',  '7 days ago'],
+        ['GPS Idar',        'Sabarkantha', 'Teacher count = 0',         '3 days ago'],
+        ['… 213 more rows', '',            '',                          ''          ],
+      ],
+      chips: [
+        'Group by issue type',
+        'Repeat offenders only',
+        'Send to BRC officers',
+        'Cross-validate against UDISE',
+      ],
+    },
+  }
+}
+
+// #29 — "Schools requiring data-entry correction or follow-up communication"
+//   VSK A6 #31 Action taken on EWS-flagged cases
+function tryDataEntryFollowup(q) {
+  if (!/(data.entry correction|follow.?up communication|data.entry.*follow|correction.*needed|entry.*follow|correction.*school)/i.test(q)) return null
+  return {
+    card: {
+      type: 'data_table',
+      title: 'Schools needing data-entry correction or follow-up',
+      annotation: '187 schools queued for follow-up. Recommended channels: SMS to principal (urgent) + email to BRC officer (routine).',
+      columns: ['School', 'Block', 'Correction needed', 'Priority'],
+      rows: [
+        ['GPS Khedbrahma',   'Khedbrahma',  'Re-enter Sept attendance', 'High'  ],
+        ['GPS Bayad',        'Bayad',       'Update infra status',      'Medium'],
+        ['GPS Talod',        'Talod',       'Add teacher count',        'High'  ],
+        ['GPS Idar',         'Idar',        'Verify LEP scores',        'Medium'],
+        ['GPS Devgadbaria',  'Devgadbaria', 'Re-submit Q2 report',      'Low'   ],
+        ['… 182 more rows',  '',            '',                          ''      ],
+      ],
+      chips: [
+        'Send SMS to high-priority',
+        'Queue email to BRC officers',
+        'Filter by district',
+        'Bulk acknowledge',
+      ],
+    },
+  }
+}
+
 // ─── Main entry ────────────────────────────────────────────────────────────
 const MATCHERS = [
+  // VSK cross-referenced (Swift Insight 3.0 iteration-1)
+  tryAttendanceScenario,
+  tryHillyDistrictsBottom,
+  tryInfraCompliance,
+  tryLepByGradeSubject,
+  tryTopBottomLep,
+  tryMultiIssueSchools,
+  tryDataSubmissionCoverage,
+  tryAnomalousSchools,
+  tryDataEntryFollowup,
+  // Earlier matchers (Ask AI starter prompts)
+  tryHighestRiskDistricts,
+  tryLowestPaymentSuccess,
+  tryXamtaFollowup,
+  tryNamoComparison,
+  tryScholarshipFunnel,
+  tryTopActions,
   tryStateOverview,
   tryTopBottomDistricts,
   trySchoolsByManagement,

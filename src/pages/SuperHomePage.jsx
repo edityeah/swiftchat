@@ -29,6 +29,8 @@ import { routeIntentSync, routeIntent } from '../nlp/globalIntentRouter'
 import { isRemoteEnabled } from '../nlp/groqInterpreter'
 import { aiAnswerCardHtml } from '../nlp/aiAnswerCard'
 import NotificationBell from '../components/notifications/NotificationBell'
+import { useVoiceCall } from '../voice/VoiceCallProvider'
+import { Phone as PhoneIcon } from 'lucide-react'
 import {
   buildAskAiGreeting, buildAskAiNextChips, runAskAiPrompt,
   processAskAiQuery, buildAskAiFallback,
@@ -39,6 +41,7 @@ import {
 import {
   isAskAiActionTrigger, decodeAskAiActionTrigger, runAskAiAction,
 } from '../features/askAi/askAiActions'
+import { answerQuery as answerAskAiChart } from '../features/askAi2/queryEngine'
 import ReportCardSection from '../components/kpi/ReportCardSection'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +78,37 @@ const DS = {
   font: 'Montserrat, sans-serif',
   // Radii
   radiusXs: 2, radiusSm: 4, radiusMd: 8, radiusLg: 12, radiusXl: 16, radius2xl: 20, radiusFull: 999,
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Call-agent button — sits in the home top bar next to the notification bell.
+// Starts the voice + screen-share session. Pulses while connected.
+// ─────────────────────────────────────────────────────────────────────────────
+function CallAgentButton() {
+  const v = useVoiceCall?.()
+  if (!v) return null
+  const { status, startCall, endCall } = v
+  const isLive = status === 'connecting' || status === 'connected'
+  const onClick = () => {
+    if (isLive) endCall()
+    else startCall()
+  }
+  return (
+    <button
+      onClick={onClick}
+      title={isLive ? 'End voice call' : 'Call Saathi (voice agent)'}
+      style={{
+        width: 36, height: 36, borderRadius: 999, marginRight: 6,
+        background: isLive ? '#B91C1C' : '#10B981',
+        color: '#FFFFFF', border: 'none', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: isLive ? '0 0 0 0 rgba(185, 28, 28, 0.5)' : 'none',
+        animation: isLive ? 'pulse-ring 1.6s ease-out infinite' : 'none',
+      }}
+    >
+      <PhoneIcon size={16} />
+    </button>
+  )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1865,15 +1899,14 @@ function WelcomeScreen({ botName, onChip, role, profile, onOpenCanvas }) {
         <div className="grid grid-cols-4 gap-3 mb-8">
           {actions.map((item, i) => {
             const Icon = item.icon
+            // Quick Actions either open a canvas directly (item.canvas) or
+            // fire a chat trigger (item.trigger). Ask AI is a chat trigger —
+            // chat opens with prompts; clicking a prompt opens the chart
+            // canvas alongside the chat (handled in the home's chat trigger
+            // dispatcher).
             const handle = () => {
-              // Quick Actions may either open a canvas directly (new pattern,
-              // used by Ask AI → AskAiCanvas) or send a chat trigger (legacy).
               if (item.canvas && typeof onOpenCanvas === 'function') {
                 onOpenCanvas(item.canvas)
-              } else if (item.trigger === 'Task: ask_ai' && typeof onOpenCanvas === 'function') {
-                // Backwards-compat: existing role tables still use trigger
-                // 'Task: ask_ai'. Route it to the Ask AI canvas regardless.
-                onOpenCanvas({ type: 'ask_ai' })
               } else {
                 onChip(item.trigger)
               }
@@ -2572,6 +2605,13 @@ export default function SuperHomePage() {
           actions: directive.actions,
           progress: directive.progress,
         })
+        // Open the chart canvas alongside the chat. Every Ask AI prompt
+        // gets a canvas — the query engine returns either a chart (best),
+        // a table / KPI grid, or an InfoCard fallback. The chat keeps its
+        // own rich response visible on the left.
+        if (directive.userBubble) {
+          openCanvas({ type: 'ask_ai', prompt: directive.userBubble, role })
+        }
         return
       }
     }
@@ -2615,10 +2655,35 @@ export default function SuperHomePage() {
               actions: directive.actions,
               progress: directive.progress,
             })
+            // Mirror prompt-click behaviour: any matched prompt opens the
+            // chart canvas with the prompt text as seed.
+            const seed = directive.userBubble || text
+            openCanvas({ type: 'ask_ai', prompt: seed, role })
             return
           }
         }
       }
+    }
+
+    // ── Ask-AI chart fallback ────────────────────────────────────────────
+    // If processAskAiQuery didn't match BUT the free text matches one of
+    // the chart-able queries in the askAi2 queryEngine (e.g. "Analyze the
+    // attendance scenario in the state"), open the Ask AI canvas with the
+    // text as seed and post a brief ack to chat. Without this, legacy
+    // task-flow triggers (e.g. TASK_FLOWS.attendance which catches the
+    // bare word 'attendance') would intercept the query first and start a
+    // Mark-Attendance class-selection flow — which is the opposite of what
+    // the user is asking for.
+    if (!silent && !text.toLowerCase().startsWith('task:') && !text.toLowerCase().startsWith('dv:')) {
+      try {
+        const { card } = answerAskAiChart(text) || {}
+        if (card && card.type !== 'info') {
+          setMessages(prev => [...prev, { id: Date.now(), role: 'user', text, opts: [] }])
+          addBot('Opening this in your Ask AI canvas →', [], { progress: ['Pulling data…', 'Building chart…'] })
+          openCanvas({ type: 'ask_ai', prompt: text, role })
+          return
+        }
+      } catch { /* fall through to existing handlers */ }
     }
 
     // ── DigiVritti — intercepted before any other handler so the cryptic
@@ -3254,6 +3319,7 @@ export default function SuperHomePage() {
 
           <div className="flex-1" />
 
+          <CallAgentButton />
           <NotificationBell />
         </div>
 
