@@ -23,7 +23,7 @@ import {
 } from '../utils/dashboardCharts'
 import { ROLE_BOTS, ROLE_SUGGESTIONS } from '../roles/roleConfig'
 import { AGGREGATES as REGISTRY_AGG, aggregatesFor } from '../data/registries'
-import { getAtRiskCohort } from '../data/atRiskData'
+import { getAtRiskCohort, getSchoolCohort } from '../data/atRiskData'
 import { dispatchDigiVritti, isDigiVrittiTrigger } from '../utils/digivrittiChat'
 import { groupByRecency, detectTool, TOOL_TITLES } from '../utils/chatHistory'
 import { routeIntentSync, routeIntent } from '../nlp/globalIntentRouter'
@@ -1363,7 +1363,7 @@ const SWITCHABLE_ROLES = [
   { id: 'teacher',         label: 'Teacher',          sublabel: 'Priya Mehta · GPS Mehsana' },
   { id: 'principal',       label: 'Principal',        sublabel: 'Rakesh Joshi · GPS Mehsana' },
   { id: 'crc',             label: 'CRC · Cluster Approver', sublabel: 'Mehul Parmar · MADHAPAR' },
-  { id: 'beo',             label: 'BEO · Block Education Officer', sublabel: 'Hetal Vyas · Mehsana Block' },
+  { id: 'beo',             label: 'BEO · Block Education Officer', sublabel: 'Hetal Vyas · Kheralu Block' },
   { id: 'deo',             label: 'DEO',              sublabel: 'Amit Trivedi · Ahmedabad' },
   { id: 'state_secretary', label: 'State Secretary',  sublabel: 'Nidhi Shah · Gujarat' },
   { id: 'pfms',            label: 'PFMS · Payment Officer', sublabel: 'Farida Shaikh · PFMS Gujarat' },
@@ -1880,8 +1880,14 @@ function getRoleAlerts(role, profile) {
   }
   // BEO — block education officer. Block-scoped real data.
   if (role === 'beo') {
-    const block = profile?.block || 'Mehsana'
+    // Fallback to KHERALU because that's the block with sample data in
+    // schools_sample.json (Mahesana district slice).
+    const block = profile?.block || 'KHERALU'
     const agg = aggregatesFor('block', block) || {}
+    // "Below benchmark" is the count of schools with attendance < 75% in the
+    // block — use the same builder the schools-at-risk canvas uses so the
+    // tile and the canvas always agree.
+    const belowBenchmark = getSchoolCohort('beo', profile, { mode: 'below_attendance_benchmark' }).atRisk.total
     return [
       { icon: '🏫', label: 'Schools', value: Number(agg.schools || 0).toLocaleString(), color: '#386AF6',
         canvas: { type: 'registry', kind: 'schools', scope: 'block', block } },
@@ -1889,8 +1895,9 @@ function getRoleAlerts(role, profile) {
         canvas: { type: 'registry', kind: 'teachers', scope: 'block', block } },
       { icon: '👥', label: 'Students', value: agg.students ? `${(agg.students/1000).toFixed(1)}K` : '—', color: '#059669',
         canvas: { type: 'dashboard', scope: 'district' } },
-      { icon: '⚠️', label: 'Below benchmark', value: '7', color: '#DC2626',
-        canvas: { type: 'at-risk-students' } },
+      { icon: '⚠️', label: 'Below benchmark', value: String(belowBenchmark),
+        color: '#DC2626',
+        canvas: { type: 'schools-at-risk', filter: 'schools_below_benchmark' } },
     ]
   }
   // Parent — child-only metrics, no scholarship management.

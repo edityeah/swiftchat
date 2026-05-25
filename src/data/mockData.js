@@ -24,7 +24,7 @@ export const DEMO_SSO_USERS = [
   { stateId: 'SEC4001', password: 'Demo@123', name: 'Nidhi Shah',    role: 'state_secretary', badge: 'State Secretary', org: 'State — Gujarat',    school: null,          district: null,        initials: 'NS', color: '#DC2626', emoji: '🏛️' },
   { stateId: 'CRC1001', password: 'Demo@123', name: 'Mehul Parmar',  role: 'crc',             badge: 'CRC · Cluster Approver', org: 'Cluster MADHAPAR · Kachchh', school: null,    district: 'Kachchh',   initials: 'MP', color: '#0EA5E9', emoji: '✅', cluster: 'MADHAPAR', approverCode: 'APR001' },
   { stateId: 'PFMS001', password: 'Demo@123', name: 'Farida Shaikh', role: 'pfms',            badge: 'PFMS · Payment Officer', org: 'PFMS — Gujarat',           school: null,    district: null,        initials: 'FS', color: '#F97316', emoji: '💰' },
-  { stateId: 'BEO5001', password: 'Demo@123', name: 'Hetal Vyas',   role: 'beo',             badge: 'BEO',             org: 'Mehsana Block Education Office', school: null,    district: 'Mehsana',   initials: 'HV', color: '#0F766E', emoji: '🏢', block: 'Mehsana' },
+  { stateId: 'BEO5001', password: 'Demo@123', name: 'Hetal Vyas',   role: 'beo',             badge: 'BEO',             org: 'Kheralu Block Education Office', school: null,    district: 'Mahesana',  initials: 'HV', color: '#0F766E', emoji: '🏢', block: 'KHERALU' },
 ]
 
 export const DEMO_PHONE_USER = {
@@ -593,12 +593,16 @@ export const USER_PROFILES = {
     tokenOrigin: 'PFMS SSO (SAML)', initials: 'FS', color: '#F97316',
   },
   beo: {
+    // Block name MUST match the SCHOOLS registry. The sample registry has 20
+    // schools in Mahesana district, all in the KHERALU block — so we pin the
+    // BEO there to keep counts > 0. (The previous "Mehsana" value didn't
+    // match any school's block field and made the home tiles read zero.)
     name: 'Hetal Vyas', stateId: 'BEO5001', role: 'beo', badge: 'BEO',
-    org: 'Mehsana Block Education Office', school: null,
-    district: 'Mehsana', scope: 'Block — Mehsana', employeeId: 'EMP-GJ-BEO-001',
+    org: 'Kheralu Block Education Office', school: null,
+    district: 'Mahesana', scope: 'Block — Kheralu', employeeId: 'EMP-GJ-BEO-001',
     phone: '9876547001', email: 'hetal.vyas@deo.gujarat.gov.in',
     dpdpaTier: 'Tier 3 — Official', sessionTTL: '12 hrs', lastLogin: '08/04/2026, 8:25 AM',
     tokenOrigin: 'Gujarat SSO (OIDC)', initials: 'HV', color: '#0F766E',
-    block: 'Mehsana',
+    block: 'KHERALU',
   },
 }

@@ -9,7 +9,7 @@ const SWITCHABLE = [
   { id: 'teacher',         label: 'Teacher',         sublabel: 'Class teacher · GPS Mehsana' },
   { id: 'principal',       label: 'Principal',       sublabel: 'GPS Mehsana' },
   { id: 'crc',             label: 'CRC',             sublabel: 'Cluster · MADHAPAR' },
-  { id: 'beo',             label: 'BEO',             sublabel: 'Block · Mehsana' },
+  { id: 'beo',             label: 'BEO',             sublabel: 'Block · Kheralu' },
   { id: 'deo',             label: 'DEO',             sublabel: 'District officer · Ahmedabad' },
   { id: 'state_secretary', label: 'State Secretary', sublabel: 'Education Dept · Gujarat' },
   { id: 'parent',          label: 'Parent',          sublabel: 'Parent portal' },
