@@ -161,6 +161,44 @@ function segmentBreakdownGeneric(role, kpi) {
   }
 }
 
+// ─── Schools-below-benchmark / Low-performing schools ───────────────────────
+// Pulls a real school list from the SCHOOLS registry filtered to the user's
+// scope. The output is a structured `school_list` payload that
+// KpiInsightCanvas renders inline (so the count on the tile and the rows
+// here always agree).
+import { schoolsInDistrict, schoolsInBlock, schoolsInCluster, SCHOOLS, buildSchoolProfile } from '../../data/registries'
+
+function schoolListForBenchmark(role, profile, mode) {
+  // Resolve pool by role.
+  let pool = []
+  if (role === 'crc')              pool = schoolsInCluster(profile?.cluster || '')
+  else if (role === 'beo')         pool = schoolsInBlock(profile?.block || '')
+  else if (role === 'deo')         pool = schoolsInDistrict(profile?.district || '')
+  else if (role === 'state_secretary') pool = SCHOOLS
+  else if (role === 'principal' && profile?.schoolId) pool = SCHOOLS.filter(s => s.schoolid === Number(profile.schoolId))
+
+  const profiles = pool.map(buildSchoolProfile)
+  const matches = profiles.filter(p =>
+    mode === 'low_performing' ? p.gsqac < 3.5 : p.attendance < 75
+  )
+
+  // Render as an entity_list — KpiInsightCanvas already knows this shape.
+  return {
+    type: 'entity_list',
+    title: mode === 'low_performing'
+      ? `${matches.length} low-performing schools (GSQAC < 3.5)`
+      : `${matches.length} schools below 75% attendance`,
+    headers: ['School', 'UDISE', 'Students', 'Attendance', 'GSQAC'],
+    rows: matches.slice(0, 25).map(p => [
+      p.name, p.udise, p.totalStudents, `${p.attendance}%`, p.gsqac,
+    ]),
+    rowCount: matches.length,
+    // The canvas reads this to render an "Open all in dedicated canvas" chip.
+    drilldownCanvas: 'schools-at-risk',
+    drilldownContext: { filter: mode === 'low_performing' ? 'low_performing_schools' : 'schools_below_benchmark' },
+  }
+}
+
 // Domain breakdown for GSQAC-style score KPIs.
 function gsqacDomainBreakdown() {
   return {
@@ -179,7 +217,7 @@ function gsqacDomainBreakdown() {
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-export function getDetailsFor(kpi, role) {
+export function getDetailsFor(kpi, role, profile) {
   if (!kpi) return null
 
   // Strong per-KPI builders first.
@@ -192,6 +230,14 @@ export function getDetailsFor(kpi, role) {
       }
     }
     return entityListForChronicAbsentees(role)
+  }
+
+  if (kpi.id === 'schools_below_attendance_benchmark') {
+    return schoolListForBenchmark(role, profile, 'below_attendance_benchmark')
+  }
+
+  if (kpi.id === 'low_performing_schools') {
+    return schoolListForBenchmark(role, profile, 'low_performing')
   }
 
   if (kpi.id === 'gsqac_score') {

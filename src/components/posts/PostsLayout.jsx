@@ -3,9 +3,13 @@ import { MessageSquare, Newspaper, ChevronUp, LogOut, Plus, Search } from 'lucid
 import { useApp } from '../../context/AppContext'
 import { USER_PROFILES } from '../../data/mockData'
 
+// Hierarchy order: classroom → state. BEO + CRC were missing — added so the
+// switcher matches SuperHomePage.SWITCHABLE_ROLES.
 const SWITCHABLE = [
   { id: 'teacher',         label: 'Teacher',         sublabel: 'Class teacher · GPS Mehsana' },
   { id: 'principal',       label: 'Principal',       sublabel: 'GPS Mehsana' },
+  { id: 'crc',             label: 'CRC',             sublabel: 'Cluster · MADHAPAR' },
+  { id: 'beo',             label: 'BEO',             sublabel: 'Block · Mehsana' },
   { id: 'deo',             label: 'DEO',             sublabel: 'District officer · Ahmedabad' },
   { id: 'state_secretary', label: 'State Secretary', sublabel: 'Education Dept · Gujarat' },
   { id: 'parent',          label: 'Parent',          sublabel: 'Parent portal' },

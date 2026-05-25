@@ -172,8 +172,11 @@ function StudentListDetails({ details, onAsk }) {
   )
 }
 
-function EntityListDetails({ details, onAsk }) {
+function EntityListDetails({ details, onAsk, onOpenSchool, onOpenFullCanvas }) {
   if (!details?.rows?.length) return null
+  // Schools-list entity_list always has UDISE in column 1 — that's our key
+  // for routing to the SchoolProfileCanvas. Detect it via the header label.
+  const isSchoolList = (details.headers || []).map(h => String(h).toLowerCase()).includes('udise')
   return (
     <ChartCard
       title={details.title}
@@ -194,27 +197,77 @@ function EntityListDetails({ details, onAsk }) {
                   {h}
                 </th>
               ))}
+              {isSchoolList && <th style={{ borderBottom: '1px solid #E5E7EB' }}></th>}
             </tr>
           </thead>
           <tbody>
-            {details.rows.map((row, ri) => (
-              <tr key={ri}>
-                {row.map((cell, ci) => (
-                  <td key={ci} style={{
-                    padding: '6px 8px',
-                    textAlign: ci === 0 ? 'left' : 'right',
-                    color: '#0E0E0E', fontSize: 12,
-                    borderBottom: '1px solid #F1F5F9',
-                    fontWeight: ci === 0 ? 600 : 500,
-                  }}>
-                    {String(cell)}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {details.rows.map((row, ri) => {
+              const clickHandler = isSchoolList && onOpenSchool
+                ? () => onOpenSchool({ name: row[0], udise: row[1] })
+                : undefined
+              return (
+                <tr
+                  key={ri}
+                  onClick={clickHandler}
+                  style={{ cursor: clickHandler ? 'pointer' : 'default' }}
+                >
+                  {row.map((cell, ci) => (
+                    <td key={ci} style={{
+                      padding: '6px 8px',
+                      textAlign: ci === 0 ? 'left' : 'right',
+                      color: ci === 0 && isSchoolList ? '#386AF6' : '#0E0E0E',
+                      fontSize: 12,
+                      borderBottom: '1px solid #F1F5F9',
+                      fontWeight: ci === 0 ? 600 : 500,
+                      textDecoration: ci === 0 && isSchoolList ? 'underline' : 'none',
+                      textDecorationColor: '#C7D2FE',
+                      textUnderlineOffset: '3px',
+                      whiteSpace: ci === 0 ? 'normal' : 'nowrap',
+                      maxWidth: ci === 0 ? 240 : undefined,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>
+                      {String(cell)}
+                    </td>
+                  ))}
+                  {isSchoolList && (
+                    <td style={{ padding: '6px 8px', textAlign: 'right', borderBottom: '1px solid #F1F5F9' }}>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700,
+                        padding: '3px 9px', borderRadius: 999,
+                        background: '#EEF2FF', color: '#3730A3',
+                        border: '1px solid #C7D2FE',
+                      }}>
+                        Open ›
+                      </span>
+                    </td>
+                  )}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
+      {/* "Showing N of total" + dedicated-canvas chip */}
+      {details.rowCount > details.rows.length && (
+        <div className="mt-3 flex items-center justify-between" style={{ fontSize: 11.5, color: '#7383A5' }}>
+          <span>Showing {details.rows.length} of {details.rowCount.toLocaleString()}.</span>
+          {details.drilldownCanvas && onOpenFullCanvas && (
+            <button
+              onClick={() => onOpenFullCanvas(details)}
+              className="active:scale-95 transition-all"
+              style={{
+                fontSize: 11.5, fontWeight: 700,
+                padding: '5px 12px', borderRadius: 999,
+                background: '#386AF6', color: '#FFFFFF',
+                border: 'none', cursor: 'pointer', fontFamily: FONT,
+              }}
+            >
+              View all {details.rowCount.toLocaleString()} ›
+            </button>
+          )}
+        </div>
+      )}
     </ChartCard>
   )
 }
@@ -250,11 +303,11 @@ function DomainBreakdownDetails({ details, onAsk }) {
   )
 }
 
-function DetailsRenderer({ details, onAsk }) {
+function DetailsRenderer({ details, onAsk, onOpenSchool, onOpenFullCanvas }) {
   if (!details) return null
   switch (details.type) {
     case 'student_list':     return <StudentListDetails    details={details} onAsk={onAsk} />
-    case 'entity_list':      return <EntityListDetails     details={details} onAsk={onAsk} />
+    case 'entity_list':      return <EntityListDetails     details={details} onAsk={onAsk} onOpenSchool={onOpenSchool} onOpenFullCanvas={onOpenFullCanvas} />
     case 'segment_bars':     return <SegmentBarsDetails    details={details} onAsk={onAsk} />
     case 'domain_breakdown': return <DomainBreakdownDetails details={details} onAsk={onAsk} />
     default: return null
@@ -480,7 +533,21 @@ export default function KpiInsightCanvas({ context }) {
 
         {/* Inline details (replaces the old "Open X list" CTA — content is
             now right here on the same canvas). */}
-        {details && <DetailsRenderer details={details} onAsk={askAboutChart} />}
+        {details && (
+          <DetailsRenderer
+            details={details}
+            onAsk={askAboutChart}
+            onOpenSchool={({ name, udise }) => openCanvas({
+              type: 'school-profile',
+              schoolId: udise, schoolName: name,
+              from: 'kpi_insight', kpiId: kpi.id,
+            })}
+            onOpenFullCanvas={(d) => openCanvas({
+              type: d.drilldownCanvas,
+              ...(d.drilldownContext || {}),
+            })}
+          />
+        )}
 
         {/* 7-day trend — now interactive (hover for date + value tooltip).
             Shown for every role on this canvas, not just admins, because

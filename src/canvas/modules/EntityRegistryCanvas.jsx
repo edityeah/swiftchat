@@ -316,7 +316,7 @@ export default function EntityRegistryCanvas({ context }) {
                   </th>
                 ))}
                 {/* Spacer header to match the trailing "Open profile" cell. */}
-                {kind === 'teachers' && <th style={{ padding: '10px 12px' }}></th>}
+                {(kind === 'teachers' || kind === 'schools') && <th style={{ padding: '10px 12px' }}></th>}
               </tr>
             </thead>
             <tbody>
@@ -382,6 +382,37 @@ export default function EntityRegistryCanvas({ context }) {
                         }}>
                           Open profile ›
                         </span>
+                      </td>
+                    )}
+                    {/* For school rows — row click still drills into teachers
+                        (existing UX). The explicit "School profile" chip lets
+                        the user jump to the school's deep-dive instead. */}
+                    {kind === 'schools' && (
+                      <td style={{ padding: '6px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            openCanvas({
+                              type: 'school-profile',
+                              schoolId: r.schoolid,
+                              schoolName: r.school,
+                              from: 'registry',
+                              fromScope: scope,
+                              fromDistrict: context?.district,
+                              fromBlock: context?.block,
+                              fromCluster: context?.cluster,
+                            })
+                          }}
+                          style={{
+                            fontSize: 10.5, fontWeight: 700,
+                            padding: '4px 10px', borderRadius: 999,
+                            background: '#EEF2FF', color: '#3730A3',
+                            border: '1px solid #C7D2FE',
+                            cursor: 'pointer', fontFamily: FONT,
+                          }}
+                        >
+                          School profile ›
+                        </button>
                       </td>
                     )}
                   </tr>

@@ -86,7 +86,9 @@ export const KPI_CATALOG = [
     statusBands: { green: 0, yellow: 5 },
     dataSource: 'Smart Attendance System (OAS)',
     sourceDashboard: 'Attendance Live Dashboard',
-    drilldown: { kind: 'canvas', canvasType: 'at-risk-students', canvasContext: { filter: 'schools_below_benchmark' } },
+    // Drilldown to the school-level cohort canvas (was student canvas — wrong
+    // for a school-count KPI).
+    drilldown: { kind: 'canvas', canvasType: 'schools-at-risk', canvasContext: { filter: 'schools_below_benchmark' } },
     ctaLabel: 'Open school list',
     reasonBuilder: ({ value }) => `${value} schools currently below benchmark.`,
   },
@@ -359,7 +361,9 @@ export const KPI_CATALOG = [
     statusBands: { green: 0, yellow: 5 },
     dataSource: 'GSQAC + Saksham Shala',
     sourceDashboard: 'GSQAC Portal',
-    drilldown: { kind: 'canvas', canvasType: 'at-risk-students', canvasContext: { filter: 'low_performing_schools' } },
+    // Drilldown to the school-level cohort canvas (was student canvas — wrong
+    // for a low-performing-schools KPI).
+    drilldown: { kind: 'canvas', canvasType: 'schools-at-risk', canvasContext: { filter: 'low_performing_schools' } },
     ctaLabel: 'Open improvement plans',
     reasonBuilder: ({ value }) => `${value} schools at C/D grade.`,
   },

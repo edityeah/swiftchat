@@ -1356,12 +1356,14 @@ function greetingReply(text, _botName, role, profile) {
 // UI COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Roles offered in the bottom-left user switcher. Order matters — this is
-// the order they appear in the popover.
+// Roles offered in the bottom-left user switcher. Order = hierarchy from
+// classroom → state. BEO (Block) was missing — added between CRC and DEO so
+// the chain reads Teacher → Principal → CRC → BEO → DEO → State.
 const SWITCHABLE_ROLES = [
   { id: 'teacher',         label: 'Teacher',          sublabel: 'Priya Mehta · GPS Mehsana' },
   { id: 'principal',       label: 'Principal',        sublabel: 'Rakesh Joshi · GPS Mehsana' },
   { id: 'crc',             label: 'CRC · Cluster Approver', sublabel: 'Mehul Parmar · MADHAPAR' },
+  { id: 'beo',             label: 'BEO · Block Education Officer', sublabel: 'Hetal Vyas · Mehsana Block' },
   { id: 'deo',             label: 'DEO',              sublabel: 'Amit Trivedi · Ahmedabad' },
   { id: 'state_secretary', label: 'State Secretary',  sublabel: 'Nidhi Shah · Gujarat' },
   { id: 'pfms',            label: 'PFMS · Payment Officer', sublabel: 'Farida Shaikh · PFMS Gujarat' },

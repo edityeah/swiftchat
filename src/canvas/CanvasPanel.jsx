@@ -22,6 +22,8 @@ import AttendanceDashboardCanvas from './modules/AttendanceDashboardCanvas'
 import AskAiCanvas from './modules/AskAiCanvas'
 import StudentProfileCanvas from './modules/StudentProfileCanvas'
 import TeacherProfileCanvas from './modules/TeacherProfileCanvas'
+import SchoolProfileCanvas  from './modules/SchoolProfileCanvas'
+import SchoolsAtRiskCanvas  from './modules/SchoolsAtRiskCanvas'
 // Legacy canvas tabs (fallback for old chatId-based canvas)
 import RichTextEditor    from './RichTextEditor'
 import DataForm          from './DataForm'
@@ -61,6 +63,8 @@ const MODULE_META = {
   'ask_ai': { icon: '✨', title: () => 'Ask AI · Saathi' },
   'student-profile': { icon: '🎒', title: ctx => ctx.studentName ? `Student · ${ctx.studentName}` : 'Student profile' },
   'teacher-profile': { icon: '👩‍🏫', title: ctx => ctx.teacherName ? `Teacher · ${ctx.teacherName}` : 'Teacher profile' },
+  'school-profile':  { icon: '🏫', title: ctx => ctx.schoolName  ? `School · ${ctx.schoolName}`   : 'School profile' },
+  'schools-at-risk': { icon: '🏫', title: ctx => ctx.filter === 'low_performing_schools' ? 'Low-performing schools' : 'Schools below benchmark' },
   digivritti:  { icon: '🌸', title: ctx => {
     const scheme = ctx.scheme && ctx.scheme !== 'all' ? ` — ${SCHEME_TITLE[ctx.scheme] || ctx.scheme}` : ''
     if (ctx.view === 'apply')          return `DigiVritti${scheme} · New Application`
@@ -232,6 +236,8 @@ export default function CanvasPanel() {
               {ctx.type === 'ask_ai' && <AskAiCanvas context={ctx} />}
               {ctx.type === 'student-profile' && <StudentProfileCanvas context={ctx} />}
               {ctx.type === 'teacher-profile' && <TeacherProfileCanvas context={ctx} />}
+              {ctx.type === 'school-profile'  && <SchoolProfileCanvas  context={ctx} />}
+              {ctx.type === 'schools-at-risk' && <SchoolsAtRiskCanvas  context={ctx} />}
             </>
           ) : (
             <>

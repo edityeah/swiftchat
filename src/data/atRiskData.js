@@ -21,7 +21,7 @@
 //   }
 
 import { STUDENTS } from './mockData'
-import { DISTRICTS } from './registries'
+import { DISTRICTS, SCHOOLS, schoolsInDistrict, schoolsInBlock, schoolsInCluster, buildSchoolProfile } from './registries'
 
 // ─── Risk tiers ──────────────────────────────────────────────────────────────
 // URGENT = EWS-flagged (composite of low att + low LO)
@@ -246,4 +246,101 @@ function sampleStudents(n) {
 
 function topN(arr, n) {
   return [...arr].sort((a, b) => (b.count ?? b.pct ?? 0) - (a.count ?? a.pct ?? 0)).slice(0, n)
+}
+
+// ─── School cohort (for "Schools below benchmark" / "Low-performing schools") ─
+// Same shape as the student cohort builder but rows are schools. Each school
+// gets a synthesised attendance / GSQAC / submission % via buildSchoolProfile.
+// The `mode` flag picks which KPI we're drilling into so the threshold logic
+// matches what the home tile counted.
+//
+// mode: 'below_attendance_benchmark' (< 75% attendance)
+//     | 'low_performing'             (GSQAC < 3.5 OR D-grade)
+//
+// Returns:
+//   {
+//     scope: 'cluster' | 'block' | 'district' | 'state',
+//     scopeLabel,
+//     totalSchools,
+//     atRisk: { urgent, high, medium, total },
+//     schools: [...profile],
+//     breakdowns: { byManagement, byCategory, byLocation, byMedium, byDistrict (state only) }
+//   }
+export function getSchoolCohort(role, profile, filters = {}) {
+  const mode = filters.mode || 'below_attendance_benchmark'
+
+  // Resolve pool by scope.
+  let pool = []
+  let scope = 'state'
+  let scopeLabel = 'Gujarat'
+  if (role === 'crc') {
+    scope = 'cluster'
+    scopeLabel = profile?.cluster || 'Cluster'
+    pool = schoolsInCluster(scopeLabel)
+  } else if (role === 'beo') {
+    scope = 'block'
+    scopeLabel = profile?.block || 'Block'
+    pool = schoolsInBlock(scopeLabel)
+  } else if (role === 'deo') {
+    scope = 'district'
+    scopeLabel = profile?.district || 'District'
+    pool = schoolsInDistrict(scopeLabel)
+  } else if (role === 'state_secretary') {
+    scope = 'state'
+    scopeLabel = 'Gujarat (all 33 districts)'
+    pool = SCHOOLS
+  } else if (role === 'principal') {
+    // Principal sees their own school only (one row); the canvas degrades
+    // gracefully to a single-row table.
+    scope = 'school'
+    const sid = profile?.schoolId
+    pool = sid ? SCHOOLS.filter(s => s.schoolid === Number(sid)) : []
+    scopeLabel = profile?.school || 'School'
+  }
+
+  // Build profiles + apply threshold.
+  const profiles = pool.map(buildSchoolProfile)
+  const matchesMode = p => {
+    if (mode === 'below_attendance_benchmark') return p.attendance < 75
+    if (mode === 'low_performing')             return p.gsqac < 3.5
+    return true
+  }
+  const schools = profiles.filter(matchesMode)
+
+  // Risk tiers (reusing school profile.tier).
+  const counts = {
+    urgent: schools.filter(s => s.tier === 'urgent').length,
+    high:   schools.filter(s => s.tier === 'high').length,
+    medium: schools.filter(s => s.tier === 'medium').length,
+    total:  schools.length,
+  }
+
+  // Breakdowns
+  function bin(getter) {
+    const map = new Map()
+    schools.forEach(s => {
+      const k = getter(s) || '—'
+      map.set(k, (map.get(k) || 0) + 1)
+    })
+    return [...map.entries()].map(([label, count]) => ({
+      label, count, pct: schools.length ? +((count / schools.length) * 100).toFixed(1) : 0,
+    }))
+  }
+  const breakdowns = {
+    byManagement: topN(bin(s => s.management), 6),
+    byCategory:   topN(bin(s => s.category), 6),
+    byLocation:   topN(bin(s => s.location), 4),
+    byMedium:     topN(bin(s => s.medium), 4),
+    byDistrict:   scope === 'state' ? topN(bin(s => s.district), 8) : null,
+    byBlock:      scope === 'district' ? topN(bin(s => s.block), 8) : null,
+  }
+
+  return {
+    scope, scopeLabel,
+    totalSchools: pool.length,
+    atRisk: counts,
+    schools,
+    breakdowns,
+    mode,
+  }
 }

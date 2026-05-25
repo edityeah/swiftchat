@@ -133,6 +133,92 @@ function _percentile(seed, salt) {
   return Math.round(20 + r * 70) // 20-90
 }
 
+// ─── School profile synthesis ────────────────────────────────────────────────
+// Like teachers, schools come from the registry with identity + posting but
+// no behavioural data. We synthesise attendance %, submission %, GSQAC,
+// dropout, infra score, HM (Head Master) details, etc. — all deterministic
+// per school ID so re-renders agree and the same school looks identical
+// across canvases.
+const _PRINCIPAL_FIRSTS = ['Rakesh','Sunita','Mahesh','Hetal','Mukesh','Pooja','Hardik','Geeta','Niraj','Bhavna','Sanjay','Madhu']
+const _PRINCIPAL_LASTS  = ['Joshi','Patel','Pandya','Trivedi','Mehta','Desai','Rao','Bhatt','Shah','Modi']
+
+function _phone18(seed) {
+  const start = 9 - (seed % 3)
+  const tail  = String(seed % 100_000_000).padStart(8, '0')
+  return `${start}${tail[0]}${tail[1]} •• ${tail.slice(-4)}`
+}
+
+export function findSchoolById(schoolId) {
+  if (schoolId == null) return null
+  const n = Number(schoolId)
+  return SCHOOLS.find(s => s.schoolid === n || String(s.schoolid) === String(schoolId)) || null
+}
+
+// Build a deep school profile: identity + posting + headmaster + behavioural
+// + recognition + infra. Used by SchoolProfileCanvas.
+export function buildSchoolProfile(school) {
+  if (!school) return null
+  const seed = Math.abs(((Number(school.schoolid) | 0) * 2654435761) % 4294967295)
+
+  // Headmaster (synthetic — no PII in source data)
+  const hmFirst = _PRINCIPAL_FIRSTS[seed % _PRINCIPAL_FIRSTS.length]
+  const hmLast  = _PRINCIPAL_LASTS[(seed >> 3) % _PRINCIPAL_LASTS.length]
+
+  // Behavioural KPIs — deterministic from the school id. Spread across the
+  // tone bands so the canvas always has a story to tell.
+  const attendance  = 55 + (seed % 40)                 // 55-94
+  const submissionPct = 60 + ((seed >> 4) % 38)         // 60-97
+  const gsqac       = +(3 + ((seed >> 6) % 18) / 10).toFixed(1)  // 3.0-4.7
+  const dropoutPct  = +(((seed >> 8) % 60) / 10).toFixed(1)      // 0.0-6.0
+  const infraScore  = 50 + ((seed >> 10) % 50)          // 50-99
+  const enrollmentDelta = ((seed >> 12) % 20) - 10      // -10..+10 year-on-year %
+  const teacherAttendance = 85 + (seed % 14)            // 85-98
+
+  // Risk tiering (mirrors the EWS dashboard logic)
+  const flags = []
+  if (attendance < 75) flags.push('Below attendance benchmark')
+  if (submissionPct < 70) flags.push('Late on data submission')
+  if (gsqac < 3.5) flags.push('Low GSQAC score')
+  if (dropoutPct > 3) flags.push('Dropout above state avg')
+  const tier = attendance < 60 || gsqac < 3.2 ? 'urgent'
+             : attendance < 75 || flags.length >= 2 ? 'high'
+             : attendance < 85 ? 'medium'
+             : 'low'
+
+  // Recognition / awards (sparse)
+  const recognition = []
+  if ((seed % 11) < 2) recognition.push('Saksham Shala 2024')
+  if ((seed %  7) < 1) recognition.push('PM SHRI selected school')
+
+  return {
+    schoolId: school.schoolid,
+    name: school.school,
+    udise: String(school.schoolid),
+    category: school.schoolcategory,
+    management: school.schoolmanagement,
+    classes: `${school.lowclass < 0 ? 1 : school.lowclass}-${school.highclass}`,
+    location: school.school_location,
+    medium: school.schoolmedium_desc,
+    village: school.village,
+    cluster: school.cluster,
+    block: titleCase(school.block || ''),
+    district: titleCase(school.district || ''),
+    established: school.school_established_year,
+    isActive: school.isactive,
+    totalStudents: school.students,
+    totalTeachers: school.teachers,
+    headmaster: {
+      name: `${hmFirst} ${hmLast}`,
+      phone: _phone18(seed),
+      tenureYears: 2 + (seed % 12),
+    },
+    // Behavioural KPIs (synthesised)
+    attendance, submissionPct, gsqac, dropoutPct, infraScore,
+    teacherAttendance, enrollmentDelta,
+    tier, flags, recognition,
+  }
+}
+
 // Returns a synthesised "full" teacher profile with behavioural + recognition
 // + admin-system fields layered on top of the registry record.
 export function buildTeacherProfile(teacher) {
