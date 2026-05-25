@@ -1362,8 +1362,8 @@ function greetingReply(text, _botName, role, profile) {
 const SWITCHABLE_ROLES = [
   { id: 'teacher',         label: 'Teacher',          sublabel: 'Priya Mehta · GPS Mehsana' },
   { id: 'principal',       label: 'Principal',        sublabel: 'Rakesh Joshi · GPS Mehsana' },
-  { id: 'crc',             label: 'CRC · Cluster Approver', sublabel: 'Mehul Parmar · MADHAPAR' },
-  { id: 'beo',             label: 'BEO · Block Education Officer', sublabel: 'Hetal Vyas · Kheralu Block' },
+  { id: 'crc',             label: 'CRC · Cluster Approver', sublabel: 'Mehul Parmar · Anand-6' },
+  { id: 'beo',             label: 'BEO · Block Education Officer', sublabel: 'Hetal Vyas · Anand Block' },
   { id: 'deo',             label: 'DEO',              sublabel: 'Amit Trivedi · Ahmedabad' },
   { id: 'state_secretary', label: 'State Secretary',  sublabel: 'Nidhi Shah · Gujarat' },
   { id: 'pfms',            label: 'PFMS · Payment Officer', sublabel: 'Farida Shaikh · PFMS Gujarat' },
@@ -1865,7 +1865,9 @@ function getRoleAlerts(role, profile) {
   ]
   // CRC — cluster approver. Show cluster-scoped registry + approval queue.
   if (role === 'crc') {
-    const cluster = profile?.cluster || 'MADHAPAR'
+    // Fallback to ANAND-6 — that's the cluster with sample data in
+    // schools_sample.json (7 schools + 2 teachers).
+    const cluster = profile?.cluster || 'ANAND-6'
     const agg = aggregatesFor('cluster', cluster) || {}
     return [
       { icon: '🏫', label: 'Schools', value: Number(agg.schools || 0).toLocaleString(), color: '#386AF6',
@@ -1880,9 +1882,9 @@ function getRoleAlerts(role, profile) {
   }
   // BEO — block education officer. Block-scoped real data.
   if (role === 'beo') {
-    // Fallback to KHERALU because that's the block with sample data in
-    // schools_sample.json (Mahesana district slice).
-    const block = profile?.block || 'KHERALU'
+    // Fallback to ANAND — that's the block with best sample overlap
+    // (19 schools + 7 teachers in the registry).
+    const block = profile?.block || 'ANAND'
     const agg = aggregatesFor('block', block) || {}
     // "Below benchmark" is the count of schools with attendance < 75% in the
     // block — use the same builder the schools-at-risk canvas uses so the

@@ -22,9 +22,9 @@ export const DEMO_SSO_USERS = [
   { stateId: 'PRI2001', password: 'Demo@123', name: 'Rakesh Joshi',  role: 'principal',       badge: 'Principal',       org: 'GPS Mehsana',        school: 'GPS Mehsana', district: 'Mehsana',   initials: 'RJ', color: '#7C3AED', emoji: '🏫' },
   { stateId: 'DEO3001', password: 'Demo@123', name: 'Amit Trivedi',  role: 'deo',             badge: 'DEO',             org: 'Ahmedabad District', school: null,          district: 'Ahmedabad', initials: 'AT', color: '#059669', emoji: '📊' },
   { stateId: 'SEC4001', password: 'Demo@123', name: 'Nidhi Shah',    role: 'state_secretary', badge: 'State Secretary', org: 'State — Gujarat',    school: null,          district: null,        initials: 'NS', color: '#DC2626', emoji: '🏛️' },
-  { stateId: 'CRC1001', password: 'Demo@123', name: 'Mehul Parmar',  role: 'crc',             badge: 'CRC · Cluster Approver', org: 'Cluster MADHAPAR · Kachchh', school: null,    district: 'Kachchh',   initials: 'MP', color: '#0EA5E9', emoji: '✅', cluster: 'MADHAPAR', approverCode: 'APR001' },
+  { stateId: 'CRC1001', password: 'Demo@123', name: 'Mehul Parmar',  role: 'crc',             badge: 'CRC · Cluster Approver', org: 'Cluster ANAND-6 · Anand', school: null,    district: 'Anand',   initials: 'MP', color: '#0EA5E9', emoji: '✅', cluster: 'ANAND-6', block: 'ANAND', approverCode: 'APR001' },
   { stateId: 'PFMS001', password: 'Demo@123', name: 'Farida Shaikh', role: 'pfms',            badge: 'PFMS · Payment Officer', org: 'PFMS — Gujarat',           school: null,    district: null,        initials: 'FS', color: '#F97316', emoji: '💰' },
-  { stateId: 'BEO5001', password: 'Demo@123', name: 'Hetal Vyas',   role: 'beo',             badge: 'BEO',             org: 'Kheralu Block Education Office', school: null,    district: 'Mahesana',  initials: 'HV', color: '#0F766E', emoji: '🏢', block: 'KHERALU' },
+  { stateId: 'BEO5001', password: 'Demo@123', name: 'Hetal Vyas',   role: 'beo',             badge: 'BEO',             org: 'Anand Block Education Office', school: null,    district: 'Anand',  initials: 'HV', color: '#0F766E', emoji: '🏢', block: 'ANAND' },
 ]
 
 export const DEMO_PHONE_USER = {
@@ -576,13 +576,17 @@ export const USER_PROFILES = {
     childName: 'Ravi Patel', childGrade: 'Class 8',
   },
   crc: {
+    // Cluster + district + block must match the SCHOOLS / TEACHERS sample
+    // registries or the home tiles roll up to zero. ANAND-6 cluster sits
+    // inside ANAND block (district ANAND) and has 7 schools + 2 teachers in
+    // the sample — keeps the demo non-empty.
     name: 'Mehul Parmar', stateId: 'CRC1001', role: 'crc', badge: 'CRC · Cluster Approver',
-    org: 'Cluster MADHAPAR · Kachchh', school: null,
-    district: 'Kachchh', scope: 'Cluster — MADHAPAR', employeeId: 'EMP-GJ-CRC-001',
+    org: 'Cluster ANAND-6 · Anand', school: null,
+    district: 'Anand', scope: 'Cluster — ANAND-6', employeeId: 'EMP-GJ-CRC-001',
     phone: '9876545001', email: 'mehul.parmar@deo.gujarat.gov.in',
     dpdpaTier: 'Tier 2 — Staff', sessionTTL: '8 hrs', lastLogin: '08/04/2026, 9:42 AM',
     tokenOrigin: 'Gujarat SSO (OIDC)', initials: 'MP', color: '#0EA5E9',
-    cluster: 'MADHAPAR', approverCode: 'APR001',
+    cluster: 'ANAND-6', block: 'ANAND', approverCode: 'APR001',
   },
   pfms: {
     name: 'Farida Shaikh', stateId: 'PFMS001', role: 'pfms', badge: 'PFMS · Payment Officer',
@@ -593,16 +597,17 @@ export const USER_PROFILES = {
     tokenOrigin: 'PFMS SSO (SAML)', initials: 'FS', color: '#F97316',
   },
   beo: {
-    // Block name MUST match the SCHOOLS registry. The sample registry has 20
-    // schools in Mahesana district, all in the KHERALU block — so we pin the
-    // BEO there to keep counts > 0. (The previous "Mehsana" value didn't
-    // match any school's block field and made the home tiles read zero.)
+    // Block + district must match the SCHOOLS / TEACHERS sample registries
+    // or the home tiles roll up to zero. ANAND block (in ANAND district)
+    // has 19 schools + 7 teachers in the sample — the most overlap
+    // between school registry and teacher registry. This also lets the
+    // BEO ↔ CRC (ANAND-6) demo chain naturally up the hierarchy.
     name: 'Hetal Vyas', stateId: 'BEO5001', role: 'beo', badge: 'BEO',
-    org: 'Kheralu Block Education Office', school: null,
-    district: 'Mahesana', scope: 'Block — Kheralu', employeeId: 'EMP-GJ-BEO-001',
+    org: 'Anand Block Education Office', school: null,
+    district: 'Anand', scope: 'Block — Anand', employeeId: 'EMP-GJ-BEO-001',
     phone: '9876547001', email: 'hetal.vyas@deo.gujarat.gov.in',
     dpdpaTier: 'Tier 3 — Official', sessionTTL: '12 hrs', lastLogin: '08/04/2026, 8:25 AM',
     tokenOrigin: 'Gujarat SSO (OIDC)', initials: 'HV', color: '#0F766E',
-    block: 'KHERALU',
+    block: 'ANAND',
   },
 }
