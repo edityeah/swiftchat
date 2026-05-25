@@ -22,7 +22,7 @@ import {
   tokens as CHART, fmt as fmtNum, ui as chartUi,
 } from '../utils/dashboardCharts'
 import { ROLE_BOTS, ROLE_SUGGESTIONS } from '../roles/roleConfig'
-import { AGGREGATES as REGISTRY_AGG, aggregatesFor } from '../data/registries'
+import { AGGREGATES as REGISTRY_AGG, aggregatesFor, teachersForScope, schoolsForScope } from '../data/registries'
 import { getAtRiskCohort, getSchoolCohort } from '../data/atRiskData'
 import { dispatchDigiVritti, isDigiVrittiTrigger } from '../utils/digivrittiChat'
 import { groupByRecency, detectTool, TOOL_TITLES } from '../utils/chatHistory'
@@ -1831,10 +1831,14 @@ function getRoleAlerts(role, profile) {
   if (role === 'deo') {
     const district = profile?.district || 'Ahmedabad'
     const agg = aggregatesFor('district', district) || {}
+    // Both forScope functions cap at 500 — registry canvas shows the same.
+    // Tile = canvas count by construction.
+    const schoolCount  = schoolsForScope({ district }).length
+    const teacherCount = teachersForScope({ district }).length
     return [
-      { icon: '🏫', label: 'Schools', value: Number(agg.schools || 0).toLocaleString(), color: '#386AF6',
+      { icon: '🏫', label: 'Schools', value: schoolCount.toLocaleString(), color: '#386AF6',
         canvas: { type: 'registry', kind: 'schools', scope: 'district', district } },
-      { icon: '👩‍🏫', label: 'Teachers', value: agg.teachers ? `${(agg.teachers/1000).toFixed(1)}K` : '—', color: '#7C3AED',
+      { icon: '👩‍🏫', label: 'Teachers', value: teacherCount.toLocaleString(), color: '#7C3AED',
         canvas: { type: 'registry', kind: 'teachers', scope: 'district', district } },
       { icon: '👥', label: 'Students', value: agg.students ? `${(agg.students/1e5).toFixed(1)}L` : '—', color: '#059669',
         canvas: { type: 'dashboard', scope: 'district', district } },
@@ -1868,11 +1872,14 @@ function getRoleAlerts(role, profile) {
     // Fallback to ANAND-6 — that's the cluster with sample data in
     // schools_sample.json (7 schools + 2 teachers).
     const cluster = profile?.cluster || 'ANAND-6'
-    const agg = aggregatesFor('cluster', cluster) || {}
+    // teachersForScope + schoolsForScope are the same functions the registry
+    // canvas calls, so tile = canvas list count by construction.
+    const schoolCount  = schoolsForScope({ cluster }).length
+    const teacherCount = teachersForScope({ cluster }).length
     return [
-      { icon: '🏫', label: 'Schools', value: Number(agg.schools || 0).toLocaleString(), color: '#386AF6',
+      { icon: '🏫', label: 'Schools', value: schoolCount.toLocaleString(), color: '#386AF6',
         canvas: { type: 'registry', kind: 'schools', scope: 'cluster', cluster } },
-      { icon: '👩‍🏫', label: 'Teachers', value: Number(agg.teachers || 0).toLocaleString(), color: '#0EA5E9',
+      { icon: '👩‍🏫', label: 'Teachers', value: teacherCount.toLocaleString(), color: '#0EA5E9',
         canvas: { type: 'registry', kind: 'teachers', scope: 'cluster', cluster } },
       { icon: '⏳', label: 'Pending reviews', value: '38', color: '#D97706',
         canvas: { type: 'digivritti', view: 'review' } },
@@ -1886,14 +1893,16 @@ function getRoleAlerts(role, profile) {
     // (19 schools + 7 teachers in the registry).
     const block = profile?.block || 'ANAND'
     const agg = aggregatesFor('block', block) || {}
+    const schoolCount  = schoolsForScope({ block }).length
+    const teacherCount = teachersForScope({ block }).length
     // "Below benchmark" is the count of schools with attendance < 75% in the
     // block — use the same builder the schools-at-risk canvas uses so the
     // tile and the canvas always agree.
     const belowBenchmark = getSchoolCohort('beo', profile, { mode: 'below_attendance_benchmark' }).atRisk.total
     return [
-      { icon: '🏫', label: 'Schools', value: Number(agg.schools || 0).toLocaleString(), color: '#386AF6',
+      { icon: '🏫', label: 'Schools', value: schoolCount.toLocaleString(), color: '#386AF6',
         canvas: { type: 'registry', kind: 'schools', scope: 'block', block } },
-      { icon: '👩‍🏫', label: 'Teachers', value: Number(agg.teachers || 0).toLocaleString(), color: '#0EA5E9',
+      { icon: '👩‍🏫', label: 'Teachers', value: teacherCount.toLocaleString(), color: '#0EA5E9',
         canvas: { type: 'registry', kind: 'teachers', scope: 'block', block } },
       { icon: '👥', label: 'Students', value: agg.students ? `${(agg.students/1000).toFixed(1)}K` : '—', color: '#059669',
         canvas: { type: 'dashboard', scope: 'district' } },

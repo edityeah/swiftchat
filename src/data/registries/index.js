@@ -104,6 +104,206 @@ export function findTeacherByCode(code) {
   return TEACHERS.find(t => t.teacherCode === n || String(t.teacherCode) === String(code)) || null
 }
 
+// ─── Teacher synthesis (single source of truth across home + canvas) ────────
+// Problem: the home tile counts teachers by summing school.teachers (from the
+// SCHOOLS sample), while the canvas reads from the TEACHERS sample. The two
+// samples don't fully overlap, so 63 on a CRC tile turned into 2 in the
+// canvas. Fix: ONE function that returns the full teacher list for any
+// scope — real teachers first, synthesised teachers to fill the gap up to
+// the expected rolled-up count (capped at 500 for browser perf). Both the
+// home tile and the registry canvas now call this same function, so the
+// count is identical by construction.
+
+const _SYNTH_F_M = ['Rakesh','Sunil','Vimal','Hiren','Jignesh','Kalpesh','Amar','Bharat','Dilip','Mahesh','Ramesh','Kiran','Nilesh','Pranay','Vipul','Hardik','Bipin','Jayesh','Dhiren','Kamlesh','Sanjay','Manoj','Vijay','Anil','Bhavesh']
+const _SYNTH_F_W = ['Sunita','Meera','Hetal','Priya','Sheetal','Nita','Pooja','Geeta','Bhavna','Rashmi','Asha','Reena','Madhu','Anjali','Falguni','Jyoti','Kavita','Lata','Neha','Pratibha','Smita','Tejal','Urmila','Vidhya','Yamini']
+const _SYNTH_LAST = ['Patel','Joshi','Pandya','Shah','Mehta','Trivedi','Bhatt','Modi','Dave','Desai','Rao','Vaghela','Solanki','Parmar','Gohil','Rathod','Chauhan','Prajapati','Makwana','Barot','Vasava','Dabhi','Thakor','Raval','Jadeja']
+const _SYNTH_DES = ['Teacher','Teacher','Teacher','Teacher','Assistant Teacher (Secondary)','Assistant Teacher (Higher Secondary)']
+const _SYNTH_QUAL = ['B.Ed. or equivalent','B.Ed. or equivalent','B.Ed. or equivalent','M.Ed.','M.A. + B.Ed.']
+const _SYNTH_TYPE = ['Regular','Regular','Regular','Regular','Contract']
+
+function _strHash(s) {
+  let h = 0
+  for (let i = 0; i < String(s).length; i++) h = ((h << 5) - h + String(s).charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+function _synthTeacher(seed, school) {
+  const isFemale = (seed & 1) === 0
+  const firsts = isFemale ? _SYNTH_F_W : _SYNTH_F_M
+  const first  = firsts[seed % firsts.length]
+  const last   = _SYNTH_LAST[(seed >> 3) % _SYNTH_LAST.length]
+  // 9-prefixed teacher codes mark synthesised rows. Real codes are 8-digit
+  // (1xxxxxxx); the 9-prefix puts ours in a non-colliding namespace.
+  const teacherCode = 90_000_000 + ((seed * 2654435761) >>> 0) % 9_999_999
+  return {
+    teacherCode,
+    name: `${first} ${last}`,
+    gender: isFemale ? 'Female' : 'Male',
+    designation: _SYNTH_DES[seed % _SYNTH_DES.length],
+    category: null,
+    qualification: _SYNTH_QUAL[(seed >> 2) % _SYNTH_QUAL.length],
+    additionalQualification: 'Graduate',
+    teacherType: _SYNTH_TYPE[seed % _SYNTH_TYPE.length],
+    classTaught: `{${((seed >> 4) % 8) + 1}}`,
+    joiningYear: 2000 + (seed % 23),
+    schoolId: school.schoolid,
+    school: school.school,
+    district: school.district,
+    block: school.block,
+    cluster: school.cluster,
+    _synth: true,                    // flag — not surfaced in UI
+  }
+}
+
+// Maximum rows we synth per scope. Above this, the canvas shows a sampling
+// banner instead of hammering the DOM. 500 covers CRC/BEO comfortably; for
+// DEO/State we lean on the banner.
+const SYNTH_TEACHER_CAP = 500
+
+export function teachersForScope({ cluster, block, district, schoolId } = {}, opts = {}) {
+  const cap = opts.cap ?? SYNTH_TEACHER_CAP
+
+  // 1. Pool of schools the synthesised teachers can be attached to.
+  let schools = []
+  if (schoolId)      schools = SCHOOLS.filter(s => s.schoolid === Number(schoolId))
+  else if (cluster)  schools = schoolsInCluster(cluster)
+  else if (block)    schools = schoolsInBlock(block)
+  else if (district) schools = schoolsInDistrict(district)
+  else               schools = SCHOOLS
+
+  // 2. Real teachers in scope (these come first in the returned list).
+  let real = []
+  if (schoolId)      real = teachersInSchool(Number(schoolId))
+  else if (cluster)  real = teachersInCluster(cluster)
+  else if (block)    real = teachersInBlock(block)
+  else if (district) real = teachersInDistrict(district)
+  else               real = TEACHERS
+
+  // 3. Target count: at district scope we trust the master districts.json
+  //    (which has the real Ahmedabad/Mahesana/etc. totals). For smaller
+  //    scopes we sum the SCHOOLS sample's `teachers` field which is the
+  //    rolled-up sample reality.
+  let expected
+  if (district && !block && !cluster && !schoolId) {
+    const d = findDistrict(district)
+    expected = d ? d.teachers : schools.reduce((a, s) => a + (s.teachers || 0), 0)
+  } else {
+    expected = schools.reduce((a, s) => a + (s.teachers || 0), 0) || real.length
+  }
+  const target = Math.min(expected, cap)
+
+  if (real.length >= target) return real.slice(0, target)
+  if (!schools.length)       return real
+
+  // 4. Synthesise the difference. Each synth teacher is tied deterministically
+  //    to a real school in scope so the school/cluster/block/district fields
+  //    line up.
+  const out = [...real]
+  const baseSeed = _strHash(`${cluster || ''}|${block || ''}|${district || ''}|${schoolId || ''}`)
+  const needed = target - real.length
+  for (let i = 0; i < needed; i++) {
+    const school = schools[i % schools.length]
+    out.push(_synthTeacher(baseSeed + i * 7919, school))
+  }
+  return out
+}
+
+// ─── School synthesis (parallel to teacher synthesis) ──────────────────────
+// District scope (e.g. Ahmedabad) has ~3,968 schools per master district
+// data, but our SCHOOLS sample only contains 20. Same fix pattern:
+// schoolsForScope() returns real schools first, then synthesised schools to
+// fill up to the master aggregate (capped at 500 for browser perf).
+const _SYNTH_SCHOOL_PREFIX = ['SHRI','SHREE','JAY','VANDE','SARDAR','VEER','MAHATMA','SARASWATI','GANDHI','SHIVAJI','SAMARPAN']
+const _SYNTH_SCHOOL_MIDDLE = ['VIDYA','BAL','PRA.','PRATHMIK','UPPER','HIGH','VIRDI','NAVA','PRAYAS','BHAVIK']
+const _SYNTH_SCHOOL_SUFFIX = ['SHALA','VIDHYALAY','SCHOOL','PRA SCHOOL','PRI SCHOOL','HIGH SCHOOL','UPS','PS']
+const _SYNTH_VILLAGES = ['VIRPUR','SAMTHALI','TARANGA','BAPUNAGAR','NIKOL','NARODA','MEMNAGAR','THALTEJ','BODAKDEV','KARELI']
+const _SYNTH_MANAGEMENT = ['Government','Government','Government','Government','Private Unaided','Granted','Local Body','Granted']
+const _SYNTH_CATEGORY = ['Primary with grades 1 to 5','Upper Primary with grades 1 to 8','Higher Secondary School','Secondary School']
+const _SYNTH_LOCATION = ['Rural','Rural','Rural','Urban']
+const _SYNTH_MEDIUM = ['Gujarati','Gujarati','Gujarati','Hindi','English']
+
+const SYNTH_SCHOOL_CAP = 500
+
+function _synthSchool(seed, parentScope) {
+  const a = _SYNTH_SCHOOL_PREFIX[seed % _SYNTH_SCHOOL_PREFIX.length]
+  const b = _SYNTH_SCHOOL_MIDDLE[(seed >> 2) % _SYNTH_SCHOOL_MIDDLE.length]
+  const c = _SYNTH_SCHOOL_SUFFIX[(seed >> 4) % _SYNTH_SCHOOL_SUFFIX.length]
+  const village = _SYNTH_VILLAGES[(seed >> 6) % _SYNTH_VILLAGES.length]
+  // Synth UDISE: 24 (Gujarat) + district id + 5-digit serial. Stays 11 digits.
+  const distId = String(parentScope.districtid || 24).padStart(4, '0')
+  const serial = String(seed % 999_999_999).padStart(7, '0').slice(0, 7)
+  const schoolid = Number(`${distId}${serial}`)
+  return {
+    schoolid,
+    statename: 'Gujarat',
+    districtid: parentScope.districtid,
+    district:   parentScope.district,
+    blockid:    parentScope.blockid,
+    block:      parentScope.block,
+    clusterid:  parentScope.clusterid,
+    cluster:    parentScope.cluster,
+    village,
+    school:     `${a} ${b} ${c}`,
+    schoolcategory:   _SYNTH_CATEGORY[seed % _SYNTH_CATEGORY.length],
+    schoolmanagement: _SYNTH_MANAGEMENT[(seed >> 1) % _SYNTH_MANAGEMENT.length],
+    lowclass:   1,
+    highclass:  (seed % 2 === 0) ? 8 : 12,
+    school_location: _SYNTH_LOCATION[(seed >> 3) % _SYNTH_LOCATION.length],
+    school_established_year: 1960 + (seed % 60),
+    isactive: true,
+    schoolmedium_desc: _SYNTH_MEDIUM[seed % _SYNTH_MEDIUM.length],
+    students: 80 + (seed % 480),                  // 80-560 students
+    teachers: 3 + ((seed >> 2) % 18),             // 3-20 teachers
+    _synth: true,
+  }
+}
+
+export function schoolsForScope({ cluster, block, district } = {}, opts = {}) {
+  const cap = opts.cap ?? SYNTH_SCHOOL_CAP
+
+  let real = []
+  if (cluster)       real = schoolsInCluster(cluster)
+  else if (block)    real = schoolsInBlock(block)
+  else if (district) real = schoolsInDistrict(district)
+  else               real = SCHOOLS
+
+  // Master expected count from districts.json for district scope; for
+  // cluster/block fall back to the real sample length (they're small scopes
+  // where sample = reality is reasonable).
+  let expected = real.length
+  if (district && !block && !cluster) {
+    const d = findDistrict(district)
+    if (d) expected = d.schools
+  }
+  const target = Math.min(expected, cap)
+  if (real.length >= target) return real.slice(0, target)
+  if (!real.length)          return real
+
+  // Use the first real school as the "shape" for synth (preserves district/
+  // block/cluster fields).
+  const parent = real[0]
+  const out = [...real]
+  const baseSeed = _strHash(`${cluster || ''}|${block || ''}|${district || ''}`)
+  const needed = target - real.length
+  for (let i = 0; i < needed; i++) {
+    out.push(_synthSchool(baseSeed + i * 9931, parent))
+  }
+  return out
+}
+
+// The rolled-up "expected" teacher headcount for any scope — what the home
+// tile should display. Stays consistent with teachersForScope().length when
+// the cap doesn't kick in.
+export function expectedTeacherCount(scope, target) {
+  if (scope === 'cluster')  return schoolsInCluster(target).reduce((a, s) => a + (s.teachers || 0), 0)
+  if (scope === 'block')    return schoolsInBlock(target).reduce((a, s) => a + (s.teachers || 0), 0)
+  if (scope === 'district') {
+    const d = findDistrict(target)
+    return d ? d.teachers : schoolsInDistrict(target).reduce((a, s) => a + (s.teachers || 0), 0)
+  }
+  return 0
+}
+
 // ─── Teacher profile synthesis ──────────────────────────────────────────────
 // The registry has identity + posting (name, school, classes taught, etc.) but
 // no behavioural data. We synthesise attendance %, TPD hours, performance and

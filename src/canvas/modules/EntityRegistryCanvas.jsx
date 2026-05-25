@@ -2,8 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import {
   DISTRICTS, SCHOOLS, TEACHERS, AGGREGATES,
-  titleCase, schoolsInDistrict, schoolsInBlock, schoolsInCluster,
-  teachersInDistrict, teachersInBlock, teachersInCluster, teachersInSchool,
+  titleCase, schoolsForScope, teachersForScope,
   aggregatesFor,
 } from '../../data/registries'
 import { SCHOOL_INFO } from '../../data/mockData'
@@ -144,23 +143,31 @@ export default function EntityRegistryCanvas({ context }) {
   const rows = useMemo(() => {
     if (kind === 'districts') return DISTRICT_ROWS
     if (kind === 'schools') {
-      if (scope === 'district' && target) return buildSchoolRows(schoolsInDistrict(target))
-      if (scope === 'block' && target)    return buildSchoolRows(schoolsInBlock(target))
-      if (scope === 'cluster' && target)  return buildSchoolRows(schoolsInCluster(target))
+      // Same SINGLE SOURCE OF TRUTH principle as teachers — schoolsForScope
+      // fills the gap between sample registry and master district counts
+      // with deterministic synth schools so tile = canvas list length.
+      if (scope === 'district' && target) return buildSchoolRows(schoolsForScope({ district: target }))
+      if (scope === 'block' && target)    return buildSchoolRows(schoolsForScope({ block: target }))
+      if (scope === 'cluster' && target)  return buildSchoolRows(schoolsForScope({ cluster: target }))
       return buildSchoolRows(SCHOOLS)
     }
     if (kind === 'teachers') {
-      if (scope === 'school' && context?.schoolId) return buildTeacherRows(teachersInSchool(context.schoolId))
-      if (scope === 'school') {
-        // Principal scope — no real schoolId mapping yet, so we take a
-        // believable school-sized slice from the district sample.
-        const district = context?.district
-        const cap = context?.teacherCount || SCHOOL_INFO.totalTeachers || 18
-        return buildTeacherRows(teachersInDistrict(district).slice(0, cap))
+      // SINGLE SOURCE OF TRUTH: teachersForScope() returns the full list
+      // (real teachers from the sample + synthesised teachers up to the
+      // rolled-up school.teachers headcount). Both the home tile counter
+      // and this canvas list call the same function, so 63 always = 63.
+      if (scope === 'school' && context?.schoolId) {
+        return buildTeacherRows(teachersForScope({ schoolId: context.schoolId }))
       }
-      if (scope === 'district' && target) return buildTeacherRows(teachersInDistrict(target))
-      if (scope === 'block' && target)    return buildTeacherRows(teachersInBlock(target))
-      if (scope === 'cluster' && target)  return buildTeacherRows(teachersInCluster(target))
+      if (scope === 'school') {
+        // Principal scope — no real schoolId mapping yet, so we cap by the
+        // mocked school's teacher count.
+        const cap = context?.teacherCount || SCHOOL_INFO.totalTeachers || 18
+        return buildTeacherRows(teachersForScope({ district: context?.district }, { cap }))
+      }
+      if (scope === 'district' && target) return buildTeacherRows(teachersForScope({ district: target }))
+      if (scope === 'block' && target)    return buildTeacherRows(teachersForScope({ block: target }))
+      if (scope === 'cluster' && target)  return buildTeacherRows(teachersForScope({ cluster: target }))
       return buildTeacherRows(TEACHERS)
     }
     return []
