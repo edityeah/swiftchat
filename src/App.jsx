@@ -75,8 +75,15 @@ function AppRoutes() {
   const isFullScreen = isAuth || screen === 'home' || screen === 'posts' || screen === 'create_post'
 
   return (
-    <div className={`fixed inset-0 flex items-center justify-center ${isFullScreen ? '' : 'bg-[#e8eaf6]'}`}>
-      <div className={`relative h-full overflow-hidden transition-all duration-300 bg-white ${
+    <div className={`fixed inset-0 flex items-center justify-center overflow-hidden ${isFullScreen ? '' : 'bg-[#e8eaf6]'}`}>
+      {/*
+        Only transition the shadow on full-screen ↔ framed route changes.
+        Previously `transition-all duration-300` was animating the WIDTH
+        too, which made content visually squish / clip during the 300ms
+        switch (e.g. when going from sso_ok → home, or home → profile).
+        Width is now instant; only the soft shadow crossfades.
+      */}
+      <div className={`relative h-full overflow-hidden transition-shadow duration-300 bg-white ${
         isFullScreen
           ? 'w-full'
           : 'w-full max-w-[420px] shadow-[0_0_40px_rgba(0,0,0,0.15)]'
