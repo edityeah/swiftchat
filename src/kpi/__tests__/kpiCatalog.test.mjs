@@ -17,11 +17,20 @@ for (const k of KPI_CATALOG) {
 }
 
 console.log('catalog: per-role counts (matches doc)')
-check('teacher = 17',         getCatalogForRole('teacher').length === 17)
-check('principal = 32',       getCatalogForRole('principal').length === 32)
-check('crc = 31',             getCatalogForRole('crc').length === 31)
-check('beo = 35',             getCatalogForRole('beo').length === 35)
-check('state_secretary = 35', getCatalogForRole('state_secretary').length === 35)
+// Per Gujarat VSK KPI Framework PDF — each role sees only the rows that
+// have a value (not "—") in its column:
+//   Teacher    = 13 (T-applicable rows)
+//   Principal  = 26 (rows 1-25 + row 29 PM SHRI)
+//   Cluster    = 25 (rows 1-25)
+//   Block      = 29 (all rows)
+//   State      = 29 (all rows)
+// Plus custom roles outside the doc: pfms = 5 (A4 admin), parent = 5
+// (child_* KPIs), deo = 0 (placeholder).
+check('teacher = 13',         getCatalogForRole('teacher').length === 13)
+check('principal = 26',       getCatalogForRole('principal').length === 26)
+check('crc = 25',             getCatalogForRole('crc').length === 25)
+check('beo = 29',             getCatalogForRole('beo').length === 29)
+check('state_secretary = 29', getCatalogForRole('state_secretary').length === 29)
 check('parent = 5',           getCatalogForRole('parent').length === 5)
 check('pfms = 5',             getCatalogForRole('pfms').length === 5)
 check('deo = 0',              getCatalogForRole('deo').length === 0)

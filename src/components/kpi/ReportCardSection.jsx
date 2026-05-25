@@ -41,7 +41,6 @@ export default function ReportCardSection() {
   const ATTENDANCE_KPIS = new Set([
     'attendance_today',
     'attendance_reporting_compliance',
-    'same_day_reporting',
   ])
 
   function openKpiDrilldown(computed) {

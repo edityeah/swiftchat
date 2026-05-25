@@ -17,7 +17,11 @@ export const KPI_VALUES = {
     // Below-assessment-result is intentionally green so it does NOT duplicate
     // assessment_result on the home (they share the same domain).
     attendance_today:               { value: 72,  meta: { unmarked: 9 } },
-    chronic_absentees:              { value: 6,   meta: { priorityCount: 2 } },
+    // value MUST match the count in StudentListDetails (kpiInsightDetails.js)
+    // and priorityCount MUST match the number of HIGH-risk students in that
+    // list (currently Ravi, Dhruv, Harsh = 3). If you change either, change
+    // both so the canvas number, the inline list, and the reason agree.
+    chronic_absentees:              { value: 6,   meta: { priorityCount: 3 } },
     attendance_reporting_compliance:{ value: 100, meta: {} },
     ews_followup_completed:         { value: 80,  meta: { pendingCount: 1 } },
     assessment_participation:       { value: 95,  meta: { absentCount: 2 } },
@@ -31,6 +35,10 @@ export const KPI_VALUES = {
     students_receiving_remediation: { value: 71,  meta: { notStarted: 3 } },
     improvement_after_intervention: { value: 62,  meta: {} },
     gsqac_score:                    { value: 78,  meta: {} },
+    // Two A5 quality KPIs the doc lists for teachers (Improvement across
+    // cycles % = 11%, Improvement actions completed % = 88%).
+    gsqac_improvement_cycles:       { value: 11,  meta: {} },
+    improvement_actions_completed:  { value: 88,  meta: { openActions: 2 } },
     same_day_reporting:             { value: 93,  meta: { lateSubmitters: 0 } },
     dashboard_data_lag:             { value: 1.5, meta: {} },
   },

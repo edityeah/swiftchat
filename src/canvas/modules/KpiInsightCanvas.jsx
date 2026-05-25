@@ -1,9 +1,9 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react'
-import { Send } from 'lucide-react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Send, Sparkles, GripHorizontal } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
 import { KPI_CATALOG } from '../../kpi/kpiCatalog'
 import { computeKpi } from '../../kpi/kpiEngine'
-import { resolveDrilldown } from '../../kpi/kpiActions'
+import { getDetailsFor } from './kpiInsightDetails'
 
 const FONT = 'Montserrat, sans-serif'
 
@@ -46,15 +46,46 @@ function benchSentence(c) {
   return `You're ${absDelta} pts below ${noun}.`
 }
 
+// ─── Chart card wrapper ─────────────────────────────────────────────────────
+// Every chart on the canvas sits inside a ChartCard so it gets a consistent
+// header + the ✨ Ask-AI button in the top-right (KSK-style). Clicking that
+// button focuses the chat input and pre-fills it with a chart-specific
+// question so the user can edit/send without losing context.
+function ChartCard({ title, askPrompt, onAsk, children }) {
+  return (
+    <div className="mt-4" style={{ borderRadius: 12, border: '1px solid #D5D8DF', padding: 12, background: '#FFFFFF' }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+          {title}
+        </span>
+        {askPrompt && (
+          <button
+            onClick={() => onAsk?.(askPrompt)}
+            title="Ask AI about this chart"
+            className="active:scale-95 transition-all inline-flex items-center gap-1"
+            style={{
+              fontSize: 10.5, fontWeight: 700,
+              padding: '3px 8px', borderRadius: 999,
+              border: '1px solid #C7D2FE', background: '#EEF2FF', color: '#3730A3',
+              cursor: 'pointer', fontFamily: FONT, letterSpacing: '0.02em',
+            }}
+          >
+            <Sparkles size={11} /> Ask AI
+          </button>
+        )}
+      </div>
+      {children}
+    </div>
+  )
+}
+
 // ─── Charts ────────────────────────────────────────────────────────────────
 
-// Tiny 7-day trend line built from the current value (mock — synthesises a
-// plausible series ending at `endValue`). Visual only — no Y-axis labels.
+// Tiny 7-day trend line built from the current value.
 function TrendChart({ endValue = 70, status = 'red' }) {
   const days = 7
   const stroke = VALUE_COLOR[status] || '#386AF6'
   const fill = (PILL[status] || PILL.unknown).bg
-  // Synthesise: gentle wobble around endValue ± 6 ending exactly at endValue.
   const values = useMemo(() => {
     const arr = []
     for (let i = 0; i < days; i++) {
@@ -89,32 +120,31 @@ function TrendChart({ endValue = 70, status = 'red' }) {
   )
 }
 
-// Horizontal bar breakdown. Shows top 5 entities with mock labels relative to
-// the current role (e.g. blocks for state, schools for cluster).
+function BarRow({ label, value, max, accent = '#386AF6', suffix = '' }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[11px]" style={{ fontFamily: FONT }}>
+        <span style={{ color: '#0E0E0E', fontWeight: 600 }}>{label}</span>
+        <span style={{ color: '#7383A5' }}>{value}{suffix}</span>
+      </div>
+      <div className="h-2 rounded-full mt-1" style={{ background: '#F1F5F9' }}>
+        <div className="h-full rounded-full" style={{ width: `${(value / max) * 100}%`, background: accent }} />
+      </div>
+    </div>
+  )
+}
+
 function BreakdownBars({ entries, accent = '#386AF6' }) {
   const maxV = Math.max(...entries.map(e => e.value), 1)
   return (
     <div className="space-y-2">
       {entries.map((e, i) => (
-        <div key={i}>
-          <div className="flex items-center justify-between text-[11px]" style={{ fontFamily: FONT }}>
-            <span style={{ color: '#0E0E0E', fontWeight: 600 }}>{e.label}</span>
-            <span style={{ color: '#7383A5' }}>{e.value}{e.unit || ''}</span>
-          </div>
-          <div className="h-2 rounded-full mt-1" style={{ background: '#F1F5F9' }}>
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${(e.value / maxV) * 100}%`, background: accent }}
-            />
-          </div>
-        </div>
+        <BarRow key={i} label={e.label} value={e.value} max={maxV} accent={accent} suffix={e.unit || ''} />
       ))}
     </div>
   )
 }
 
-// Generic breakdown source depending on role + KPI. Returns 5 mock rows so the
-// chart always has something to render in the prototype.
 function getBreakdown(role, kpi) {
   const labels =
     role === 'state_secretary' ? ['Ahmedabad', 'Surat', 'Mehsana', 'Kachchh', 'Rajkot'] :
@@ -123,12 +153,167 @@ function getBreakdown(role, kpi) {
     role === 'principal'        ? ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10'] :
     role === 'pfms'             ? ['Namo Lakshmi', 'Namo Saraswati', 'DigiVritti', 'Gyan Sadhana', 'Gyan Sethu'] :
     ['Class 6-A', 'Class 6-B', 'Class 7-A', 'Class 8-A', 'Class 8-B']
-  // Synthesise values around the catalog value
   return labels.map((label, i) => ({
     label,
     value: i === 0 ? 92 : i === 1 ? 87 : i === 2 ? 78 : i === 3 ? 69 : 58,
     unit: kpi.unit === '%' ? '%' : kpi.unit === 'hours' ? ' hrs' : '',
   }))
+}
+
+// ─── Details renderers (the inline content that replaces the old nested CTA) ─
+
+// 14-day pattern strip used in the chronic-absentees student list. Each cell
+// is one school day: green = present, red = absent.
+function PatternStrip({ pattern }) {
+  return (
+    <div className="flex gap-[3px]">
+      {pattern.map((d, i) => (
+        <span
+          key={i}
+          title={d === 'A' ? 'Absent' : 'Present'}
+          style={{
+            width: 10, height: 14, borderRadius: 2,
+            background: d === 'A' ? '#FCA5A5' : '#86EFAC',
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+function StudentListDetails({ details, onAsk }) {
+  return (
+    <ChartCard
+      title={`Students · ${details.title}`}
+      askPrompt="Why are these students absent so often? Show me the pattern."
+      onAsk={onAsk}
+    >
+      <div className="space-y-3 mt-1">
+        {details.students.map((s, i) => {
+          const risk = s.risk === 'high' ? { bg: '#FEE2E2', fg: '#B91C1C' } : { bg: '#FEF3C7', fg: '#92400E' }
+          return (
+            <div key={i} style={{ borderTop: i === 0 ? 'none' : '1px solid #F1F5F9', paddingTop: i === 0 ? 0 : 10 }}>
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0E0E0E' }}>{s.name}</div>
+                  <div style={{ fontSize: 11, color: '#7383A5', marginTop: 1 }}>
+                    {s.klass} · last seen {s.lastSeen}
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0 ml-3">
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                    background: risk.bg, color: risk.fg, letterSpacing: '0.02em',
+                  }}>
+                    {s.risk === 'high' ? 'HIGH' : 'WATCH'}
+                  </span>
+                  <div style={{ fontSize: 11, color: '#B91C1C', fontWeight: 700, marginTop: 2 }}>
+                    {s.absentDays} days absent
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <PatternStrip pattern={s.pattern} />
+                <span style={{ fontSize: 10.5, color: '#828996', marginLeft: 8 }}>Last 14 days</span>
+              </div>
+              <div style={{ fontSize: 11.5, color: '#0E0E0E', marginTop: 6, lineHeight: '16px' }}>
+                {s.reason}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </ChartCard>
+  )
+}
+
+function EntityListDetails({ details, onAsk }) {
+  if (!details?.rows?.length) return null
+  return (
+    <ChartCard
+      title={details.title}
+      askPrompt="Compare these. Which one needs intervention first?"
+      onAsk={onAsk}
+    >
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: FONT, fontSize: 12 }}>
+          <thead>
+            <tr>
+              {details.headers.map((h, i) => (
+                <th key={i} style={{
+                  textAlign: i === 0 ? 'left' : 'right',
+                  padding: '6px 8px', color: '#828996',
+                  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+                  borderBottom: '1px solid #E5E7EB',
+                }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {details.rows.map((row, ri) => (
+              <tr key={ri}>
+                {row.map((cell, ci) => (
+                  <td key={ci} style={{
+                    padding: '6px 8px',
+                    textAlign: ci === 0 ? 'left' : 'right',
+                    color: '#0E0E0E', fontSize: 12,
+                    borderBottom: '1px solid #F1F5F9',
+                    fontWeight: ci === 0 ? 600 : 500,
+                  }}>
+                    {String(cell)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </ChartCard>
+  )
+}
+
+function SegmentBarsDetails({ details, onAsk }) {
+  if (!details?.segments?.length) return null
+  return (
+    <ChartCard
+      title={details.title}
+      askPrompt={`Why is ${details.segments[details.segments.length - 1]?.label || 'the bottom'} lagging? What can fix it?`}
+      onAsk={onAsk}
+    >
+      <BreakdownBars entries={details.segments} accent="#386AF6" />
+    </ChartCard>
+  )
+}
+
+function DomainBreakdownDetails({ details, onAsk }) {
+  if (!details?.domains?.length) return null
+  const max = Math.max(...details.domains.map(d => d.value), 5)
+  return (
+    <ChartCard
+      title={details.title}
+      askPrompt="Which domain is dragging down the overall score?"
+      onAsk={onAsk}
+    >
+      <div className="space-y-2">
+        {details.domains.map((d, i) => (
+          <BarRow key={i} label={d.label} value={d.value} max={max} accent={d.color} suffix="" />
+        ))}
+      </div>
+    </ChartCard>
+  )
+}
+
+function DetailsRenderer({ details, onAsk }) {
+  if (!details) return null
+  switch (details.type) {
+    case 'student_list':     return <StudentListDetails    details={details} onAsk={onAsk} />
+    case 'entity_list':      return <EntityListDetails     details={details} onAsk={onAsk} />
+    case 'segment_bars':     return <SegmentBarsDetails    details={details} onAsk={onAsk} />
+    case 'domain_breakdown': return <DomainBreakdownDetails details={details} onAsk={onAsk} />
+    default: return null
+  }
 }
 
 // ─── Per-KPI quick-ask chips ────────────────────────────────────────────────
@@ -142,7 +327,6 @@ const PER_KPI_CHIPS = {
   attendance_today:               ['Show unmarked students', 'Compare with last week',     'Who marked late today?'],
   chronic_absentees:              ['List high-risk students',  'Last home-visit dates',     'Compare with last month'],
   attendance_reporting_compliance:['Which schools missed today?','Avg submission time',     'Weekly compliance trend'],
-  ews_followup_completed:         ['Show pending follow-ups',  'Who needs urgent action?',  'EWS flag reasons'],
   assessment_participation:       ['Show absent students',     'Subject-wise gaps',         'Last cycle comparison'],
   proficiency:                    ['Breakdown by subject',     'Below cut-off list',        'Trend across cycles'],
   students_below_proficiency:     ['Who is closest to passing','Score bucket breakdown',    'Recommended remediation'],
@@ -151,9 +335,6 @@ const PER_KPI_CHIPS = {
   reports_generated_downloaded:   ['Schools that have not downloaded', 'Most-downloaded reports', 'Send a reminder'],
   student_module_completion:      ['Show incomplete cohort',    'Top-engaging modules',     'Send a nudge'],
   tpd_hours:                      ['What modules are pending?', 'Recommend next training',  'Show TPD calendar'],
-  students_identified_remediation:['Identification by subject', 'Most recent flags',        'Send to remediation'],
-  students_receiving_remediation: ['Who hasn\'t started yet?',  'Module assignment',        'Track engagement'],
-  improvement_after_intervention: ['Which interventions worked?','Cohort comparison',       'Schedule next cycle'],
   scheme_beneficiary_mapping:     ['Unmapped students',         'By scheme breakdown',      'Send to IPMS'],
   payment_completion:             ['Failed transactions',       'By scheme breakdown',      'Open PFMS queue'],
   pending_payments_grievances:    ['Open grievances',           'Past SLA cases',           'By type breakdown'],
@@ -164,20 +345,12 @@ const PER_KPI_CHIPS = {
   low_performing_schools:         ['C/D grade list',            'Targeted support plan',    'Next inspection date'],
   gsqac_improvement_cycles:       ['Schools improving',         'Schools regressing',       'Action completion'],
   improvement_actions_completed:  ['Open actions',              'Closed late',              'Most-stuck items'],
-  same_day_reporting:             ['Late submitters',           'Average lag',              'Compliance trend'],
-  dashboard_data_lag:             ['Latest sync times',         'Slowest pipelines',        'Outages this week'],
   pending_issues_cross_system:    ['By system breakdown',       'Aging buckets',            'Priority queue'],
   repeat_issues_pct:              ['Root-cause categories',     'By system breakdown',      'Resolution patterns'],
   action_on_ews_flagged:          ['Untouched cases',           'Average action time',      'By severity'],
   dropout_reduction:              ['Worst-hit blocks',          'Intervention impact',      'Re-enrollment funnel'],
   reenrollment_vs_target:         ['Block-wise progress',       'OOSC discovered',          'Target vs actual'],
   samagra_shiksha_expenditure:    ['Under-utilised heads',      'Approved vs spent',        'Audit flags'],
-  pm_shri_performance:            ['PM SHRI school list',       'Outcome trends',           'Compliance status'],
-  child_attendance:               ['Last 30 days',              'Reasons for absence',      'Message teacher'],
-  child_proficiency:              ['Subject-wise scores',       'Improvement areas',        'Tips for parents'],
-  child_chronic_absence_flag:     ['Why was my child flagged?', 'Removal criteria',         'Message teacher'],
-  child_scholarship_status:       ['Documents required',        'Next payment date',        'Bank details'],
-  child_namo_docs_pending:        ['Document checklist',        'Upload steps',             'Customer support'],
 }
 
 function chipsFor(kpiId) {
@@ -188,11 +361,8 @@ function chipsFor(kpiId) {
 function mockBotHtml(kpi, role, prompt, computed) {
   const colorFor = s => VALUE_COLOR[s] || '#0E0E0E'
   const pill = PILL[computed.status]
-  // Tries to match the prompt against PER_KPI_CHIPS — gives a tailored
-  // mock response — otherwise a generic acknowledgement.
   const p = String(prompt || '').toLowerCase()
 
-  // Generic "trend" response
   if (/(trend|last week|cycle|over time)/i.test(p)) {
     return `<div style="font-family:${FONT};font-size:12.5px;color:#0E0E0E;line-height:18px">
       Over the last 7 days <b>${kpi.shortName}</b> has held around <b style="color:${colorFor(computed.status)}">${formatValue(computed.value, kpi.unit)}</b>.
@@ -207,18 +377,24 @@ function mockBotHtml(kpi, role, prompt, computed) {
       Gap: <b style="color:${(computed.delta ?? 0) >= 0 ? '#065F46' : '#B91C1C'}">${(computed.delta ?? 0) >= 0 ? '+' : '−'}${Math.abs(computed.delta ?? 0).toFixed(0)} pts</b>.
     </div>`
   }
+  if (/(why|pattern|reason|absent)/i.test(p) && kpi.id === 'chronic_absentees') {
+    return `<div style="font-family:${FONT};font-size:12.5px;color:#0E0E0E;line-height:18px">
+      The 6 flagged students share two patterns: <b>Monday/Friday clustering</b> (4 of 6) and
+      <b>family-economic reasons</b> (Ravi & Jay — seasonal labour, sibling care).
+      <br/><br/>Recommendation: prioritise home visits to Ravi, Dhruv, and Harsh this week.
+    </div>`
+  }
   if (/(do first|priority|fix|action)/i.test(p)) {
     return `<div style="font-family:${FONT};font-size:12.5px;color:#0E0E0E;line-height:18px">
-      Recommended next action: <b>${kpi.ctaLabel || 'Open the drill-down view'}</b>.
+      Recommended next action: <b>focus on the 3 HIGH-risk students</b>.
       ${computed.reason ? `<br/><span style="color:#7383A5">Context: ${computed.reason}</span>` : ''}
     </div>`
   }
   if (/(list|show|who|which|breakdown)/i.test(p)) {
     return `<div style="font-family:${FONT};font-size:12.5px;color:#0E0E0E;line-height:18px">
-      Opening the related drill-down view in the canvas above. Tap <b>${kpi.ctaLabel || 'Open'}</b> for the full record list.
+      The list is in the chart above. Scroll up to see all ${formatValue(computed.value, kpi.unit)} entries with their patterns.
     </div>`
   }
-  // Default
   return `<div style="font-family:${FONT};font-size:12.5px;color:#0E0E0E;line-height:18px">
     Got it. <b style="color:${pill.fg}">${kpi.shortName}</b> is currently
     <b style="color:${colorFor(computed.status)}">${formatValue(computed.value, kpi.unit)}</b>${benchSentence(computed) ? ` (${benchSentence(computed).toLowerCase()})` : ''}.
@@ -226,7 +402,6 @@ function mockBotHtml(kpi, role, prompt, computed) {
   </div>`
 }
 
-// ─── Bubble + typing ────────────────────────────────────────────────────────
 function Bubble({ message }) {
   const isUser = message.role === 'user'
   return (
@@ -260,9 +435,52 @@ function Typing() {
   )
 }
 
+// ─── Resizable split hook ───────────────────────────────────────────────────
+// Tracks the chat-panel height in px. Drag the handle between dashboard and
+// chat to resize. Min 140 (just enough for input + a couple of bubbles), max
+// 80% of the canvas height. Default 280 (enough for 3-4 messages).
+function useResizableChat(containerRef) {
+  const [chatHeight, setChatHeight] = useState(280)
+  const draggingRef = useRef(false)
+
+  const onPointerDown = useCallback((e) => {
+    e.preventDefault()
+    draggingRef.current = true
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
+
+  useEffect(() => {
+    function onMove(e) {
+      if (!draggingRef.current) return
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const total = rect.height
+      const newChat = total - (e.clientY - rect.top)
+      const min = 140
+      const max = Math.max(min, total * 0.8)
+      setChatHeight(Math.min(max, Math.max(min, newChat)))
+    }
+    function onUp() {
+      if (!draggingRef.current) return
+      draggingRef.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [containerRef])
+
+  return { chatHeight, onPointerDown }
+}
+
 // ─── Main canvas ────────────────────────────────────────────────────────────
 export default function KpiInsightCanvas({ context }) {
-  const { role, userProfile, openCanvas, navigate, closeCanvas } = useApp()
+  const { role, userProfile } = useApp()
   const profile = userProfile || {}
 
   const computed = useMemo(() => {
@@ -277,13 +495,14 @@ export default function KpiInsightCanvas({ context }) {
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
   const messagesEndRef = useRef(null)
+  const inputRef = useRef(null)
+  const containerRef = useRef(null)
+  const { chatHeight, onPointerDown } = useResizableChat(containerRef)
 
-  // Auto-scroll the chat to the bottom when new messages come in.
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, typing])
 
-  // Reset chat history when the canvas's KPI changes.
   useEffect(() => {
     setMessages([])
     setInput('')
@@ -298,12 +517,13 @@ export default function KpiInsightCanvas({ context }) {
     )
   }
 
-  const { kpi, value, status, reason, meta } = computed
+  const { kpi, value, status, reason } = computed
   const pill = PILL[status] || PILL.unknown
   const valueColor = VALUE_COLOR[status] || VALUE_COLOR.unknown
   const showCharts = ADMIN_ROLES.has(role)
   const chips = chipsFor(kpi.id)
   const breakdown = getBreakdown(role, kpi)
+  const details = getDetailsFor(kpi, role, profile, computed)
 
   function send(text) {
     const t = String(text || '').trim()
@@ -319,15 +539,12 @@ export default function KpiInsightCanvas({ context }) {
     }, 650)
   }
 
-  function runPrimary() {
-    const dd = resolveDrilldown(kpi.id, role, profile)
-    if (!dd) return
-    if (dd.kind === 'canvas') {
-      openCanvas({ type: dd.canvasType, ...dd.canvasContext })
-    } else if (dd.kind === 'chat') {
-      closeCanvas?.()
-      navigate('chat_' + dd.chatId)
-    }
+  // Used by the per-chart ✨ Ask AI button. Pre-fills the input (so the user
+  // can edit before sending) and focuses it. The chat panel grows
+  // automatically on first message via the messages list.
+  function askAboutChart(prompt) {
+    setInput(prompt)
+    setTimeout(() => inputRef.current?.focus(), 30)
   }
 
   function onKeyDown(e) {
@@ -338,9 +555,9 @@ export default function KpiInsightCanvas({ context }) {
   }
 
   return (
-    <div className="h-full flex flex-col" style={{ background: '#FFFFFF', fontFamily: FONT }}>
-      {/* ─── Top: dashboard (scrollable) ─────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto p-5">
+    <div ref={containerRef} className="h-full flex flex-col" style={{ background: '#FFFFFF', fontFamily: FONT }}>
+      {/* ─── Top: dashboard (scrollable, flex-1) ─────────────────────────── */}
+      <div className="flex-1 overflow-y-auto p-5 min-h-0">
         {/* Header */}
         <div className="flex items-center justify-between gap-2 mb-1">
           <span style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
@@ -367,43 +584,40 @@ export default function KpiInsightCanvas({ context }) {
               {benchSentence(computed)}
             </div>
           )}
+          {reason && (
+            <div style={{ fontSize: 12, color: '#7383A5', marginTop: 6, lineHeight: '17px' }}>
+              {reason}
+            </div>
+          )}
         </div>
+
+        {/* Inline details (replaces the old "Open X list" CTA — content is
+            now right here on the same canvas). */}
+        {details && <DetailsRenderer details={details} onAsk={askAboutChart} />}
 
         {/* Admin-only: 7-day trend chart */}
         {showCharts && (
-          <div className="mt-4" style={{ borderRadius: 12, border: '1px solid #D5D8DF', padding: 12, background: '#FFFFFF' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 6 }}>
-              7-day trend
-            </div>
+          <ChartCard title="7-day trend" askPrompt={`Why is the ${kpi.shortName.toLowerCase()} trend like this?`} onAsk={askAboutChart}>
             <TrendChart endValue={typeof value === 'number' ? value : 70} status={status} />
-          </div>
+          </ChartCard>
         )}
 
         {/* Admin-only: breakdown bars */}
         {showCharts && (
-          <div className="mt-4" style={{ borderRadius: 12, border: '1px solid #D5D8DF', padding: 14, background: '#FFFFFF' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>
-              {role === 'state_secretary' ? 'Top districts' :
-               role === 'beo'              ? 'Schools in block' :
-               role === 'crc'              ? 'Schools in cluster' :
-               role === 'principal'        ? 'Classes' :
-               role === 'pfms'             ? 'By scheme' :
-               'Breakdown'}
-            </div>
+          <ChartCard
+            title={
+              role === 'state_secretary' ? 'Top districts' :
+              role === 'beo'              ? 'Schools in block' :
+              role === 'crc'              ? 'Schools in cluster' :
+              role === 'principal'        ? 'Classes' :
+              role === 'pfms'             ? 'By scheme' :
+              'Breakdown'
+            }
+            askPrompt="Why is the bottom entity lagging?"
+            onAsk={askAboutChart}
+          >
             <BreakdownBars entries={breakdown} accent="#386AF6" />
-          </div>
-        )}
-
-        {/* Why */}
-        {reason && (
-          <div className="mt-5">
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 8 }}>
-              Why
-            </div>
-            <div style={{ fontSize: 13, color: '#0E0E0E', lineHeight: '19px' }}>
-              {reason}
-            </div>
-          </div>
+          </ChartCard>
         )}
 
         {/* What this measures */}
@@ -418,21 +632,6 @@ export default function KpiInsightCanvas({ context }) {
           </div>
         )}
 
-        {/* Primary action */}
-        {kpi.ctaLabel && (
-          <button
-            onClick={runPrimary}
-            className="w-full mt-6 active:scale-[0.98] transition-all"
-            style={{
-              padding: '12px 16px', borderRadius: 999,
-              background: '#386AF6', color: '#FFFFFF',
-              fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer',
-            }}
-          >
-            {kpi.ctaLabel} ›
-          </button>
-        )}
-
         {/* Source footnote */}
         <div className="mt-6" style={{ fontSize: 11, color: '#828996', lineHeight: '16px' }}>
           Source: {kpi.dataSource}
@@ -441,10 +640,35 @@ export default function KpiInsightCanvas({ context }) {
         </div>
       </div>
 
-      {/* ─── Bottom: chat (sticky) ────────────────────────────────────────── */}
-      <div className="flex-shrink-0 border-t" style={{ borderColor: '#E5E7EB', background: '#FFFFFF' }}>
+      {/* ─── Drag handle (resize chat panel up/down) ─────────────────────── */}
+      <div
+        onPointerDown={onPointerDown}
+        title="Drag to resize chat"
+        style={{
+          height: 12,
+          background: '#F8FAFC',
+          borderTop: '1px solid #E5E7EB',
+          borderBottom: '1px solid #E5E7EB',
+          cursor: 'row-resize',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <GripHorizontal size={14} color="#7383A5" />
+      </div>
+
+      {/* ─── Bottom: chat (height controlled by drag handle) ─────────────── */}
+      <div
+        className="flex flex-col"
+        style={{
+          height: chatHeight,
+          flexShrink: 0,
+          borderColor: '#E5E7EB',
+          background: '#FFFFFF',
+        }}
+      >
         {/* Quick-ask chips */}
-        <div className="px-4 pt-3 pb-2 flex flex-wrap gap-1.5">
+        <div className="px-4 pt-3 pb-2 flex flex-wrap gap-1.5 flex-shrink-0">
           {chips.map(c => (
             <button
               key={c}
@@ -462,18 +686,22 @@ export default function KpiInsightCanvas({ context }) {
           ))}
         </div>
 
-        {/* Messages (capped height; scrolls internally if long) */}
-        {(messages.length > 0 || typing) && (
-          <div className="px-4 py-3 space-y-2 overflow-y-auto" style={{ maxHeight: 240, background: '#F8FAFC' }}>
-            {messages.map(m => <Bubble key={m.id} message={m} />)}
-            {typing && <Typing />}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
+        {/* Messages — flex-1 so they expand to fill whatever the resize gave us. */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0" style={{ background: '#F8FAFC' }}>
+          {messages.length === 0 && !typing && (
+            <div style={{ fontSize: 12, color: '#7383A5', textAlign: 'center', padding: '12px 8px' }}>
+              Use a chip above, click an ✨ Ask AI button on any chart, or type a question below.
+            </div>
+          )}
+          {messages.map(m => <Bubble key={m.id} message={m} />)}
+          {typing && <Typing />}
+          <div ref={messagesEndRef} />
+        </div>
 
         {/* Input */}
-        <div className="px-3 py-2 flex items-center gap-2" style={{ borderTop: '1px solid #E5E7EB' }}>
+        <div className="px-3 py-2 flex items-center gap-2 flex-shrink-0" style={{ borderTop: '1px solid #E5E7EB' }}>
           <input
+            ref={inputRef}
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}

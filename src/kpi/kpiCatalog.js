@@ -30,6 +30,10 @@ const ALL_DOC_ROLES = ['teacher', 'principal', 'crc', 'beo', 'state_secretary']
 const FROM_PRINCIPAL = ['principal', 'crc', 'beo', 'state_secretary']
 const BLOCK_AND_STATE = ['beo', 'state_secretary']
 const PRINCIPAL_BLOCK_STATE = ['principal', 'beo', 'state_secretary']
+// All KPIs in the catalog now map 1:1 to the Gujarat VSK KPI Framework PDF.
+// Each row's `roles` array lists only the columns that have a value (not "—")
+// in the doc — that's why teachers see 13, principals 26, cluster 25, block
+// 29, and state 29.
 
 export const KPI_CATALOG = [
   // ─── A1: Attendance & Access ───────────────────────────────────────────────
@@ -97,21 +101,9 @@ export const KPI_CATALOG = [
     reasonBuilder: ({ value, benchmark, delta }) =>
       delta < 0 ? `${Math.abs(delta).toFixed(0)} pts below state average (${benchmark}%).` : 'On par with state average.',
   },
-  {
-    id: 'ews_followup_completed',
-    framework: 'A1', domain: 'Attendance & Access',
-    shortName: 'EWS follow-up',
-    description: 'Percentage of EWS-flagged at-risk students for whom a follow-up action (home visit, counsellor call) has been completed and logged.',
-    roles: ALL_DOC_ROLES,
-    unit: '%', direction: 'higher',
-    benchmarkSource: 'state_avg', fixedTarget: null,
-    statusBands: { green: 0, yellow: -10 },
-    dataSource: 'EWS — flagged list + action logs',
-    sourceDashboard: 'EWS Dashboard',
-    drilldown: { kind: 'canvas', canvasType: 'at-risk-students', canvasContext: { filter: 'ews_pending_followup' } },
-    ctaLabel: 'Review pending follow-ups',
-    reasonBuilder: ({ meta }) => `${meta?.pendingCount ?? 0} flagged students without follow-up.`,
-  },
+  // (Removed `ews_followup_completed` — not in the Gujarat VSK KPI Framework
+  // doc. EWS follow-up is still surfaced via the EWS canvas, but is no longer
+  // tracked as a top-level KPI on anyone's report card.)
 
   // ─── A2: Assessment & Learning Outcomes ────────────────────────────────────
   {
@@ -236,51 +228,11 @@ export const KPI_CATALOG = [
     ctaLabel: 'Open training progress',
     reasonBuilder: ({ value }) => `${value} of 50 hours logged.`,
   },
-  {
-    id: 'students_identified_remediation',
-    framework: 'A3', domain: 'Adaptive Learning & Remediation',
-    shortName: 'Identified for remediation',
-    description: 'Percentage of students identified as requiring remedial support based on Xamta/PARAKH proficiency gap analysis.',
-    roles: ALL_DOC_ROLES,
-    unit: '%', direction: 'higher',
-    benchmarkSource: 'state_avg', fixedTarget: null,
-    statusBands: { green: 0, yellow: -5 },
-    dataSource: 'Xamta + PARAKH + Gyan Prabhav',
-    sourceDashboard: 'Gyan Prabhav (Phase 2 Diagnostics)',
-    drilldown: { kind: 'canvas', canvasType: 'at-risk-students', canvasContext: { filter: 'identified_remediation' } },
-    ctaLabel: 'Open list',
-    reasonBuilder: ({ meta }) => `${meta?.identifiedCount ?? 0} students flagged.`,
-  },
-  {
-    id: 'students_receiving_remediation',
-    framework: 'A3', domain: 'Adaptive Learning & Remediation',
-    shortName: 'Receiving remediation',
-    description: 'Percentage of identified students actively enrolled in a remediation program.',
-    roles: ALL_DOC_ROLES,
-    unit: '%', direction: 'higher',
-    benchmarkSource: 'state_avg', fixedTarget: null,
-    statusBands: { green: 0, yellow: -10 },
-    dataSource: 'Swamulyankan / G-SHALA + PLC logs',
-    sourceDashboard: 'Swamulyankan Dashboard',
-    drilldown: { kind: 'canvas', canvasType: 'at-risk-students', canvasContext: { filter: 'remediation_not_started' } },
-    ctaLabel: 'Enrol pending students',
-    reasonBuilder: ({ meta }) => `${meta?.notStarted ?? 0} identified students not yet enrolled.`,
-  },
-  {
-    id: 'improvement_after_intervention',
-    framework: 'A3', domain: 'Adaptive Learning & Remediation',
-    shortName: 'Improvement post-intervention',
-    description: 'Percentage of students showing ≥5 pp improvement in post-intervention assessments compared to baseline.',
-    roles: ALL_DOC_ROLES,
-    unit: '%', direction: 'higher',
-    benchmarkSource: 'state_avg', fixedTarget: null,
-    statusBands: { green: 0, yellow: -10 },
-    dataSource: 'Xamta + Gyan Prabhav',
-    sourceDashboard: 'Gyan Prabhav Progression View',
-    drilldown: { kind: 'canvas', canvasType: 'class-report', canvasContext: { view: 'intervention_impact' } },
-    ctaLabel: 'See impact report',
-    reasonBuilder: ({ value }) => `${value.toFixed(0)}% of students improved post-intervention.`,
-  },
+  // (Removed `students_identified_remediation`, `students_receiving_remediation`,
+  //  and `improvement_after_intervention` — not in the Gujarat VSK KPI Framework
+  //  doc. Doc's CPD-for-Teachers domain only carries Module completion and
+  //  Teacher TPD hours; remediation is surfaced via the at-risk-students canvas
+  //  rather than as a top-level KPI.)
 
   // ─── A4: Administration & Service Delivery ─────────────────────────────────
   //  All 5 use roles: [...FROM_PRINCIPAL, 'pfms']
@@ -411,7 +363,8 @@ export const KPI_CATALOG = [
     framework: 'A5', domain: 'Accreditation & School Quality',
     shortName: 'GSQAC Δ across cycles',
     description: 'Percentage-point change in a school\'s GSQAC score between consecutive cycles.',
-    roles: FROM_PRINCIPAL,
+    // Doc framework: applies to teachers too (Improvement across cycles %).
+    roles: ALL_DOC_ROLES,
     unit: '%', direction: 'higher',
     benchmarkSource: 'state_avg', fixedTarget: null,
     statusBands: { green: 0, yellow: -3 },
@@ -426,7 +379,8 @@ export const KPI_CATALOG = [
     framework: 'A5', domain: 'Accreditation & School Quality',
     shortName: 'Improvement actions',
     description: 'Percentage of improvement action points (assigned post-GSQAC) that the school has completed within timeframe.',
-    roles: FROM_PRINCIPAL,
+    // Doc framework: applies to teachers too (Improvement actions completed %).
+    roles: ALL_DOC_ROLES,
     unit: '%', direction: 'higher',
     benchmarkSource: 'state_avg', fixedTarget: null,
     statusBands: { green: 0, yellow: -10 },
@@ -438,36 +392,9 @@ export const KPI_CATALOG = [
   },
 
   // ─── A6: Governance, Monitoring & AI Efficiency ────────────────────────────
-  {
-    id: 'same_day_reporting',
-    framework: 'A6', domain: 'Governance, Monitoring & AI Efficiency',
-    shortName: 'Same-day reporting',
-    description: 'Percentage of schools that submitted all required data (attendance, assessment completion, admin updates) by the same-day cut-off.',
-    roles: ALL_DOC_ROLES,
-    unit: '%', direction: 'higher',
-    benchmarkSource: 'state_avg', fixedTarget: null,
-    statusBands: { green: 0, yellow: -10 },
-    dataSource: 'VSK Backend Logs + Pocket VSK',
-    sourceDashboard: 'VSK Dashboards — Data Timeliness',
-    drilldown: { kind: 'canvas', canvasType: 'report', canvasContext: { view: 'data_timeliness' } },
-    ctaLabel: 'See late submitters',
-    reasonBuilder: ({ meta }) => `${meta?.lateSubmitters ?? 0} schools missed same-day cut-off.`,
-  },
-  {
-    id: 'dashboard_data_lag',
-    framework: 'A6', domain: 'Governance, Monitoring & AI Efficiency',
-    shortName: 'Dashboard lag (hrs)',
-    description: 'Average time in hours between data entry at school/teacher level and visibility on VSK dashboards. Target ≤2 hrs.',
-    roles: ALL_DOC_ROLES,
-    unit: 'hours', direction: 'lower',
-    benchmarkSource: 'fixed_target', fixedTarget: 2,
-    statusBands: { green: 0, yellow: -2 },
-    dataSource: 'VSK Backend System Logs',
-    sourceDashboard: 'VSK System Performance Monitor',
-    drilldown: { kind: 'canvas', canvasType: 'report', canvasContext: { view: 'data_lag' } },
-    ctaLabel: 'Open system monitor',
-    reasonBuilder: ({ value }) => `${value} hrs average lag (target ≤2 hrs).`,
-  },
+  // (Removed `same_day_reporting` and `dashboard_data_lag` — not in the
+  //  Gujarat VSK KPI Framework doc. Doc's A6 carries only Pending issues
+  //  count, Repeat issues %, and Action taken on flagged cases %.)
   {
     id: 'pending_issues_cross_system',
     framework: 'A6', domain: 'Governance, Monitoring & AI Efficiency',
