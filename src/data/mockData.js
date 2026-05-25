@@ -41,26 +41,85 @@ const LAST = ['Shah','Patel','Mehta','Joshi','Trivedi','Pandya','Desai','Chauhan
 const RISKS = ['low','low','low','low','low','low','medium','medium','high']
 const LEVELS = ['Advanced','Proficient','Proficient','Proficient','Basic','Basic']
 
+// Plausible demographic vocab for the prototype. All synthetic — no real
+// person's data here.
+const BLOOD_GROUPS = ['O+','O+','O+','B+','B+','A+','A+','AB+','O-','B-']
+const SOCIAL_CATS  = ['General','General','OBC','OBC','SC','ST','OBC','General','SC','OBC']
+const MEDIUMS      = ['Gujarati','Gujarati','Gujarati','Gujarati','English','Gujarati','Hindi','Gujarati']
+const SECTIONS     = ['A','B','A','A','B','A','C','A']
+const RELIGIONS    = ['Hindu','Hindu','Hindu','Muslim','Hindu','Hindu','Jain','Christian','Hindu','Hindu']
+
+// SSMID-style 18-digit student ID. Mirrors the Gujarat student registry
+// format: district(4) + block(3) + cluster(2) + school(2) + serial(7) so the
+// digits roll up correctly to the school/block/district hierarchy. The
+// district prefix is keyed off the user's district so a Mehsana student
+// gets a Mehsana-prefixed ID. Deterministic per (grade, index).
+function buildSsmid(grade, i, distSeed = 2402) {
+  const blockCode   = String(((distSeed * 7 + grade) % 900) + 100)              // 3 digits
+  const clusterCode = String(((distSeed * 13 + grade * 5) % 90) + 10)           // 2 digits
+  const schoolCode  = String(((distSeed * 11 + grade * 9) % 90) + 10)           // 2 digits
+  const serial      = String(((grade * 100000) + (i * 17) + distSeed) % 10000000).padStart(7, '0')
+  return `${distSeed}${blockCode}${clusterCode}${schoolCode}${serial}` // 4+3+2+2+7 = 18
+}
+
+// Plausible-looking 10-digit Indian mobile number. Always starts with 9/8/7.
+function buildPhone(grade, i, seed) {
+  const start = [9, 8, 7][(grade + i) % 3]
+  const rest  = String(((seed * 13 + i * 7919 + grade * 977) % 1_000_000_000)).padStart(9, '0')
+  return `${start}${rest}`
+}
+
+// Date offset N years back from a fixed reference (today is `today`).
+function buildDob(grade, i) {
+  const year = 2025 - grade - 6                          // a class-`grade` student is ~grade+6 years old
+  const month = ((i * 5 + grade * 3) % 12) + 1
+  const day   = ((i * 7 + grade * 11) % 28) + 1
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
 function genStudents(grade, count = 32) {
-  const year = 2024 - grade - 5
   const out = []
   for (let i = 0; i < count; i++) {
     const isFemale = i % 2 === 1
     const first = isFemale ? FIRST_F[i % FIRST_F.length] : FIRST_M[i % FIRST_M.length]
-    const last = LAST[(i * 7 + grade) % LAST.length]
+    const last  = LAST[(i * 7 + grade) % LAST.length]
+    const fatherFirst = FIRST_M[(i * 3 + grade) % FIRST_M.length]
+    const motherFirst = FIRST_F[(i * 5 + grade + 1) % FIRST_F.length]
     const att = 55 + Math.floor(((i * 13 + grade * 7) % 40))
     const m = 35 + Math.floor(((i * 11 + grade * 3) % 55))
     const s = 35 + Math.floor(((i * 9 + grade * 5) % 55))
     const g = 40 + Math.floor(((i * 7 + grade * 11) % 50))
+    const ssmid = buildSsmid(grade, i)
     out.push({
-      id: `STU-${grade}${String(i + 1).padStart(3, '0')}`,
+      // Primary id is now the 18-digit SSMID (matches the StudentRegistry CSV).
+      id: ssmid,
+      ssmid,                                              // alias for clarity
+      grNo: `${grade}${String(i + 1).padStart(3, '0')}`,  // 4-digit General Register no.
       name: `${first} ${last}`,
+      fatherName: `${fatherFirst} ${last}`,
+      motherName: `${motherFirst} ${last}`,
       gender: isFemale ? 'F' : 'M',
-      dob: `${year}-${String((i % 12) + 1).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`,
-      guardian: `${isFemale ? FIRST_F[(i + 5) % FIRST_F.length] : FIRST_M[(i + 5) % FIRST_M.length]} ${last}`,
-      phone: `98765${String(grade * 1000 + i + 1).padStart(5, '0')}`,
+      dob: buildDob(grade, i),
+      bloodGroup: BLOOD_GROUPS[(i * 3 + grade) % BLOOD_GROUPS.length],
+      socialCategory: SOCIAL_CATS[(i * 7 + grade) % SOCIAL_CATS.length],
+      religion: RELIGIONS[(i * 5 + grade) % RELIGIONS.length],
+      medium: MEDIUMS[(i * 2 + grade) % MEDIUMS.length],
+      isRTE: ((i * 11 + grade) % 9) === 0,               // ~11% are RTE-admitted
+      section: SECTIONS[(i + grade) % SECTIONS.length],
+      // Kept for back-compat with code that still reads `guardian` / `phone`.
+      guardian: `${motherFirst} ${last}`,
+      parentPhone: buildPhone(grade, i, 1),
+      fatherPhone: buildPhone(grade, i, 2),
+      phone: buildPhone(grade, i, 1),
+      // School-hierarchy IDs (so the UDISE roll-up is consistent).
+      schoolId:   ssmid.slice(0, 11),                    // first 11 = school
+      districtId: ssmid.slice(0, 4),
+      blockId:    ssmid.slice(0, 7),
+      clusterId:  ssmid.slice(0, 9),
+      enrollmentDate: `2024-06-${String(((i * 3 + grade) % 28) + 1).padStart(2, '0')}`,
       attendance: att,
       risk: att < 65 ? 'high' : att < 75 ? 'medium' : 'low',
+      ewsFlag: att < 65 || m < 45,                       // attendance OR LO red zone
       math: m, sci: s, guj: g,
       level: m >= 80 ? 'Advanced' : m >= 60 ? 'Proficient' : 'Basic',
       namoLaxmi: i < 8 ? ['approved','approved','pending','pending','rejected','approved','pending','approved'][i] : null,
@@ -97,6 +156,155 @@ export const PERF_DATA = { 3: gradePerf(3), 5: gradePerf(5), 6: gradePerf(6), 8:
 // ── Attendance (last 7 days) ─────────────────────────────────────────────────
 export const ATTENDANCE_TREND = [82, 85, 88, 80, 86, 90, 88]
 export const ATTENDANCE_DAYS  = ['M', 'T', 'W', 'T', 'F', 'S', 'T']
+
+// ── 30-day attendance history ────────────────────────────────────────────────
+// Deterministic per-student 30-day attendance series. The fraction of P days
+// is biased toward each student's `attendance` field so the 30-day summary
+// rolls up to roughly the same value the rest of the app already shows.
+// Sundays are auto-holidays. Memoised per (grade, student.id) so cost is
+// O(once) across the session — the canvas can re-render freely.
+function _strHash(s) {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0
+  return Math.abs(h)
+}
+
+// Anchor "today" date for the 30-day window. Using the same anchor across
+// the session keeps the trend stable while the user clicks around.
+const ATTENDANCE_TODAY = new Date()
+
+const _attendanceCache = new Map()
+export function getStudent30DayAttendance(student) {
+  if (!student) return []
+  const cacheKey = student.id || student.ssmid
+  if (_attendanceCache.has(cacheKey)) return _attendanceCache.get(cacheKey)
+  const days = 30
+  const seed = _strHash(String(cacheKey))
+  // Target absences = (100 - attendance%) * 0.3 (~30 working days in 30 calendar days).
+  // Bias absences to Monday/Friday (real chronic-absence pattern).
+  const workingDays = []
+  const out = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(ATTENDANCE_TODAY); d.setDate(ATTENDANCE_TODAY.getDate() - i)
+    const dow = d.getDay() // 0 = Sun, 6 = Sat
+    const isHoliday = dow === 0
+    out.push({
+      date: d.toISOString().slice(0, 10),
+      dow,
+      status: isHoliday ? 'H' : 'P', // overwritten below for absences
+    })
+    if (!isHoliday) workingDays.push(out.length - 1)
+  }
+  const att = student.attendance ?? 75
+  const targetAbsent = Math.round(((100 - att) / 100) * workingDays.length)
+  // Weighted picks: Mon/Fri get higher absence weight, recent days slightly higher.
+  const cand = workingDays.map((idx, k) => {
+    const dow = out[idx].dow
+    let w = 1
+    if (dow === 1 || dow === 5) w *= 2.2
+    if (k >= workingDays.length - 8) w *= 1.3
+    const r = ((seed * (k + 1) * 9301 + 49297) % 233280) / 233280
+    return { idx, w: w * (0.6 + r * 0.6) }
+  })
+  cand.sort((a, b) => b.w - a.w)
+  for (let i = 0; i < targetAbsent && i < cand.length; i++) {
+    out[cand[i].idx].status = 'A'
+  }
+  _attendanceCache.set(cacheKey, out)
+  return out
+}
+
+// Class-level 30-day daily roll-up. For each of the last 30 calendar days,
+// returns { date, presentCount, absentCount, totalWorking, pct, isHoliday }.
+export function get30DayClassAttendance(grade) {
+  const students = STUDENTS[grade] || []
+  if (!students.length) return []
+  const perStudent = students.map(s => getStudent30DayAttendance(s))
+  const days = perStudent[0]?.length || 30
+  const out = []
+  for (let d = 0; d < days; d++) {
+    const dayCells = perStudent.map(arr => arr[d])
+    const isHoliday = dayCells[0]?.status === 'H'
+    const presentCount = dayCells.filter(c => c.status === 'P').length
+    const absentCount  = dayCells.filter(c => c.status === 'A').length
+    const totalWorking = presentCount + absentCount
+    out.push({
+      date: dayCells[0]?.date,
+      dow: dayCells[0]?.dow,
+      isHoliday,
+      presentCount, absentCount,
+      totalWorking,
+      pct: totalWorking ? +((presentCount / totalWorking) * 100).toFixed(1) : null,
+    })
+  }
+  return out
+}
+
+// Per-student 30-day summary: { id, name, presentDays, absentDays, workingDays, pct }.
+// Used by the "Last 30 days" table view.
+export function get30DayStudentSummaries(grade) {
+  const students = STUDENTS[grade] || []
+  return students.map(s => {
+    const series = getStudent30DayAttendance(s)
+    const presentDays = series.filter(d => d.status === 'P').length
+    const absentDays  = series.filter(d => d.status === 'A').length
+    const workingDays = presentDays + absentDays
+    return {
+      id: s.id, ssmid: s.ssmid, name: s.name,
+      risk: s.risk, ewsFlag: s.ewsFlag,
+      presentDays, absentDays, workingDays,
+      pct: workingDays ? +((presentDays / workingDays) * 100).toFixed(1) : 0,
+      // Compact P/A/H string for the last 30 days (rendered as a strip).
+      pattern: series.map(d => d.status).join(''),
+    }
+  })
+}
+
+// Per-student LAST 7 DAYS summary — slices the tail off the 30-day series.
+// Used by the "Download attendance report for last week" PDF.
+export function get7DayStudentSummaries(grade) {
+  const students = STUDENTS[grade] || []
+  return students.map(s => {
+    const series = getStudent30DayAttendance(s).slice(-7)
+    const presentDays = series.filter(d => d.status === 'P').length
+    const absentDays  = series.filter(d => d.status === 'A').length
+    const workingDays = presentDays + absentDays
+    return {
+      id: s.id, ssmid: s.ssmid, name: s.name,
+      risk: s.risk, ewsFlag: s.ewsFlag,
+      presentDays, absentDays, workingDays,
+      pct: workingDays ? +((presentDays / workingDays) * 100).toFixed(1) : 0,
+      pattern: series.map(d => d.status).join(''),
+    }
+  })
+}
+
+// School-level 30-day daily roll-up. Aggregates across all grades that have
+// STUDENTS data.
+export function get30DaySchoolAttendance() {
+  const grades = Object.keys(STUDENTS).map(Number).sort((a, b) => a - b)
+  const perGrade = grades.map(g => get30DayClassAttendance(g))
+  if (!perGrade.length) return []
+  const days = perGrade[0].length
+  const out = []
+  for (let d = 0; d < days; d++) {
+    let p = 0, a = 0
+    for (const g of perGrade) {
+      p += g[d].presentCount
+      a += g[d].absentCount
+    }
+    const total = p + a
+    out.push({
+      date: perGrade[0][d].date,
+      dow: perGrade[0][d].dow,
+      isHoliday: perGrade[0][d].isHoliday,
+      presentCount: p, absentCount: a,
+      totalWorking: total,
+      pct: total ? +((p / total) * 100).toFixed(1) : null,
+    })
+  }
+  return out
+}
 
 // Attendance history per grade (last 5 days per student — for webview)
 export function getAttendanceHistory(grade, days = 5) {

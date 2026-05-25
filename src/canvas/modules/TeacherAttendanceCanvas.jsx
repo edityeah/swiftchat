@@ -22,7 +22,7 @@ function SummaryChip({ value, label, color }) {
 }
 
 export default function TeacherAttendanceCanvas({ context }) {
-  const { userProfile, showToast } = useApp()
+  const { userProfile, showToast, openCanvas } = useApp()
   const profile = userProfile || {}
 
   // Principal marks attendance for teachers in their school. We don't have
@@ -114,14 +114,24 @@ export default function TeacherAttendanceCanvas({ context }) {
                   background: status ? tone.bg + '55' : '#FFFFFF',
                 }}
               >
-                <div className="flex-1 min-w-0">
+                <button
+                  onClick={() => openCanvas?.({
+                    type: 'teacher-profile',
+                    teacherCode: t.teacherCode,
+                    teacherName: t.name,
+                    from: 'teacher-attendance',
+                  })}
+                  title="Open teacher profile"
+                  className="flex-1 min-w-0 text-left active:scale-[0.99] transition-all"
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0E0E0E', fontFamily: FONT, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {t.name}
+                    {t.name} <span style={{ color: '#386AF6', fontWeight: 700, fontSize: 11 }}>›</span>
                   </div>
                   <div style={{ fontSize: 11, color: '#7383A5', fontFamily: FONT, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {t.designation || '—'}{t.classTaught ? ` · ${t.classTaught}` : ''}
                   </div>
-                </div>
+                </button>
 
                 {/* Status pill (if marked) */}
                 {tone && (

@@ -20,6 +20,8 @@ import EntityRegistryCanvas    from './modules/EntityRegistryCanvas'
 import TeacherAttendanceCanvas from './modules/TeacherAttendanceCanvas'
 import AttendanceDashboardCanvas from './modules/AttendanceDashboardCanvas'
 import AskAiCanvas from './modules/AskAiCanvas'
+import StudentProfileCanvas from './modules/StudentProfileCanvas'
+import TeacherProfileCanvas from './modules/TeacherProfileCanvas'
 // Legacy canvas tabs (fallback for old chatId-based canvas)
 import RichTextEditor    from './RichTextEditor'
 import DataForm          from './DataForm'
@@ -57,6 +59,8 @@ const MODULE_META = {
     ctx.scope === 'cluster' ? 'Attendance — Cluster' :
     ctx.scope === 'school' ? 'Attendance — School' : 'Attendance dashboard' },
   'ask_ai': { icon: '✨', title: () => 'Ask AI · Saathi' },
+  'student-profile': { icon: '🎒', title: ctx => ctx.studentName ? `Student · ${ctx.studentName}` : 'Student profile' },
+  'teacher-profile': { icon: '👩‍🏫', title: ctx => ctx.teacherName ? `Teacher · ${ctx.teacherName}` : 'Teacher profile' },
   digivritti:  { icon: '🌸', title: ctx => {
     const scheme = ctx.scheme && ctx.scheme !== 'all' ? ` — ${SCHEME_TITLE[ctx.scheme] || ctx.scheme}` : ''
     if (ctx.view === 'apply')          return `DigiVritti${scheme} · New Application`
@@ -226,6 +230,8 @@ export default function CanvasPanel() {
               {ctx.type === 'teacher-attendance' && <TeacherAttendanceCanvas context={ctx} />}
               {ctx.type === 'attendance-dashboard' && <AttendanceDashboardCanvas context={ctx} />}
               {ctx.type === 'ask_ai' && <AskAiCanvas context={ctx} />}
+              {ctx.type === 'student-profile' && <StudentProfileCanvas context={ctx} />}
+              {ctx.type === 'teacher-profile' && <TeacherProfileCanvas context={ctx} />}
             </>
           ) : (
             <>

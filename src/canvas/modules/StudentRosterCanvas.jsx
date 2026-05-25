@@ -233,6 +233,16 @@ export default function StudentRosterCanvas({ context }) {
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: nl.bg, color: nl.fg }}>{nl.label}</span>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
+                        <ActionChip
+                          onClick={() => openCanvas({
+                            type: 'student-profile',
+                            studentId: s.id,
+                            grade: s.grade || grade,
+                            studentName: s.name,
+                            from: 'student-roster',
+                          })}
+                          variant="primary"
+                        >🎒 Open profile</ActionChip>
                         <ActionChip onClick={() => handleParentAlert(s)} variant="warn">📨 Parent alert</ActionChip>
                         <ActionChip onClick={handleOpenAttendance}>📅 Open attendance</ActionChip>
                         <ActionChip onClick={handleOpenDashboard}>📊 Class dashboard</ActionChip>

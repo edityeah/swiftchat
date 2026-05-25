@@ -201,7 +201,19 @@ export default function EntityRegistryCanvas({ context }) {
     } else if (kind === 'schools') {
       openCanvas({ type: 'registry', kind: 'teachers', scope: 'school', schoolId: r.schoolid, schoolName: r.school })
     } else if (kind === 'teachers') {
-      // Teachers are leaves — clicking does nothing for now (could open a teacher detail later).
+      // Open the role-aware teacher profile. The `from*` fields let the
+      // profile's back arrow restore exactly this registry view.
+      openCanvas({
+        type: 'teacher-profile',
+        teacherCode: r.teacherCode,
+        teacherName: r.name,
+        from: 'registry',
+        fromScope: scope,
+        fromSchoolId: context?.schoolId,
+        fromDistrict: context?.district,
+        fromBlock: context?.block,
+        fromCluster: context?.cluster,
+      })
     }
   }
 
@@ -303,35 +315,47 @@ export default function EntityRegistryCanvas({ context }) {
                     {c.label} {sortKey === c.key ? (sortAsc ? '▲' : '▼') : ''}
                   </th>
                 ))}
+                {/* Spacer header to match the trailing "Open profile" cell. */}
+                {kind === 'teachers' && <th style={{ padding: '10px 12px' }}></th>}
               </tr>
             </thead>
             <tbody>
               {displayRows.map((r, idx) => {
                 const tone = kind === 'districts' ? attendanceTone(r.attendance) : null
+                // Teachers, districts AND schools all open something on click.
+                // Leaves before this change were teachers — they're not anymore.
+                const isClickable = ['districts', 'schools', 'teachers'].includes(kind)
                 return (
                   <tr
                     key={r._id ?? idx}
                     onClick={() => onRowClick(r)}
+                    className="entity-row"
                     style={{
                       borderBottom: idx === displayRows.length - 1 ? 'none' : '1px solid #F1F5F9',
-                      cursor: kind === 'teachers' ? 'default' : 'pointer',
+                      cursor: isClickable ? 'pointer' : 'default',
                     }}
                   >
                     {cols.map(c => {
                       const isAtt = c.key === 'attendance'
+                      // Render the "Name" column as a primary-blue link so it
+                      // looks like an obvious click target.
+                      const isNameCol = c.key === 'name' && kind === 'teachers'
                       return (
                         <td
                           key={c.key}
                           style={{
                             padding: '10px 12px',
                             textAlign: c.align,
-                            color: '#0E0E0E',
-                            fontWeight: ['name','school'].includes(c.key) ? 600 : 500,
+                            color: isNameCol ? '#386AF6' : '#0E0E0E',
+                            fontWeight: ['name','school'].includes(c.key) ? 700 : 500,
                             fontFamily: FONT,
                             whiteSpace: 'nowrap',
                             maxWidth: c.key === 'school' || c.key === 'qualification' ? 220 : undefined,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
+                            textDecoration: isNameCol ? 'underline' : 'none',
+                            textDecorationColor: isNameCol ? '#C7D2FE' : undefined,
+                            textUnderlineOffset: isNameCol ? '3px' : undefined,
                           }}
                         >
                           {isAtt && tone ? (
@@ -346,12 +370,31 @@ export default function EntityRegistryCanvas({ context }) {
                         </td>
                       )
                     })}
+                    {/* Trailing "Open profile" affordance for teacher rows. */}
+                    {kind === 'teachers' && (
+                      <td style={{ padding: '6px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <span style={{
+                          fontSize: 10.5, fontWeight: 700,
+                          padding: '4px 10px', borderRadius: 999,
+                          background: '#EEF2FF', color: '#3730A3',
+                          border: '1px solid #C7D2FE',
+                          display: 'inline-block',
+                        }}>
+                          Open profile ›
+                        </span>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
             </tbody>
           </table>
         </div>
+        {/* Row hover style applied via a scoped <style> block (works in JSX
+            without needing a CSS file). */}
+        <style>{`
+          .entity-row:hover { background: #F8FAFC; }
+        `}</style>
 
         {displayRows.length === 0 && (
           <div className="mt-3 text-center" style={{ color: '#7383A5', fontSize: 13, padding: 16 }}>
@@ -363,7 +406,7 @@ export default function EntityRegistryCanvas({ context }) {
           Source: VSK Gujarat master tables (counts and identifiers only; PII fields are not loaded).
           {kind === 'districts' && ' Click a district to see its schools.'}
           {kind === 'schools' && ' Click a school to see its teachers.'}
-          {kind === 'teachers' && ' Teacher names are synthetic placeholders for the prototype.'}
+          {kind === 'teachers' && ' Click any row (or the underlined teacher name) to open the full profile. Names are synthetic placeholders for the prototype.'}
         </div>
       </div>
     </div>

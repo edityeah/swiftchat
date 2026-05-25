@@ -1,9 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Send, Sparkles, GripHorizontal } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import { KPI_CATALOG } from '../../kpi/kpiCatalog'
 import { computeKpi } from '../../kpi/kpiEngine'
 import { getDetailsFor } from './kpiInsightDetails'
+import {
+  ChartCard, InteractiveTrendChart, DragHandle, useResizableChat, ChatPanel,
+  fetchCanvasReply, mdToHtml,
+} from '../shared/kpiCanvasShared'
 
 const FONT = 'Montserrat, sans-serif'
 
@@ -46,78 +49,20 @@ function benchSentence(c) {
   return `You're ${absDelta} pts below ${noun}.`
 }
 
-// ─── Chart card wrapper ─────────────────────────────────────────────────────
-// Every chart on the canvas sits inside a ChartCard so it gets a consistent
-// header + the ✨ Ask-AI button in the top-right (KSK-style). Clicking that
-// button focuses the chat input and pre-fills it with a chart-specific
-// question so the user can edit/send without losing context.
-function ChartCard({ title, askPrompt, onAsk, children }) {
-  return (
-    <div className="mt-4" style={{ borderRadius: 12, border: '1px solid #D5D8DF', padding: 12, background: '#FFFFFF' }}>
-      <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-          {title}
-        </span>
-        {askPrompt && (
-          <button
-            onClick={() => onAsk?.(askPrompt)}
-            title="Ask AI about this chart"
-            className="active:scale-95 transition-all inline-flex items-center gap-1"
-            style={{
-              fontSize: 10.5, fontWeight: 700,
-              padding: '3px 8px', borderRadius: 999,
-              border: '1px solid #C7D2FE', background: '#EEF2FF', color: '#3730A3',
-              cursor: 'pointer', fontFamily: FONT, letterSpacing: '0.02em',
-            }}
-          >
-            <Sparkles size={11} /> Ask AI
-          </button>
-        )}
-      </div>
-      {children}
-    </div>
-  )
-}
+// (ChartCard, InteractiveTrendChart, Bubble, Typing, useResizableChat,
+//  DragHandle, ChatPanel — all live in ../shared/kpiCanvasShared.jsx.)
 
-// ─── Charts ────────────────────────────────────────────────────────────────
-
-// Tiny 7-day trend line built from the current value.
-function TrendChart({ endValue = 70, status = 'red' }) {
-  const days = 7
-  const stroke = VALUE_COLOR[status] || '#386AF6'
-  const fill = (PILL[status] || PILL.unknown).bg
-  const values = useMemo(() => {
-    const arr = []
-    for (let i = 0; i < days; i++) {
-      const offset = Math.sin((i + 1) * 1.3) * 5 + (Math.random() - 0.5) * 2
-      arr.push(Math.max(20, endValue - 4 + offset))
-    }
-    arr[days - 1] = endValue
-    return arr
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const W = 280, H = 70, pad = 8
-  const min = Math.min(...values) - 3
-  const max = Math.max(...values) + 3
-  const range = max - min || 1
-  const pts = values.map((v, i) => {
-    const x = pad + (i / (days - 1)) * (W - pad * 2)
-    const y = H - pad - ((v - min) / range) * (H - pad * 2)
-    return [x, y]
-  })
-  const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')
-  const areaPath = `${linePath} L${pts[pts.length - 1][0].toFixed(1)},${H - pad} L${pts[0][0].toFixed(1)},${H - pad} Z`
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: 'block' }}>
-      <path d={areaPath} fill={fill} opacity={0.55} />
-      <path d={linePath} fill="none" stroke={stroke} strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round" />
-      {pts.map((p, i) => (
-        <circle key={i} cx={p[0]} cy={p[1]} r={i === pts.length - 1 ? 3 : 2} fill={stroke} />
-      ))}
-    </svg>
-  )
+// Build a 7-day series of plausible values ending at `endValue`. Used to
+// feed the interactive trend chart with deterministic but believable data.
+function build7DaySeries(endValue) {
+  if (typeof endValue !== 'number') endValue = 70
+  const arr = []
+  for (let i = 0; i < 7; i++) {
+    const offset = Math.sin((i + 1) * 1.3) * 4 + Math.cos((i + 2) * 0.9) * 2
+    arr.push(Math.max(20, endValue - 3 + offset))
+  }
+  arr[6] = endValue
+  return arr.map(v => +v.toFixed(1))
 }
 
 function BarRow({ label, value, max, accent = '#386AF6', suffix = '' }) {
@@ -402,85 +347,9 @@ function mockBotHtml(kpi, role, prompt, computed) {
   </div>`
 }
 
-function Bubble({ message }) {
-  const isUser = message.role === 'user'
-  return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div
-        className={`max-w-[88%] px-3 py-2 rounded-2xl text-[12.5px] ${isUser ? 'rounded-br-[4px]' : 'rounded-bl-[4px]'}`}
-        style={{
-          background: isUser ? '#386AF6' : '#F8FAFC',
-          color: isUser ? '#FFFFFF' : '#0E0E0E',
-          fontFamily: FONT,
-          lineHeight: '18px',
-        }}
-      >
-        {isUser
-          ? message.text
-          : <div dangerouslySetInnerHTML={{ __html: message.html }} />}
-      </div>
-    </div>
-  )
-}
-
-function Typing() {
-  return (
-    <div className="flex justify-start">
-      <div className="px-3 py-2 rounded-2xl rounded-bl-[4px] bg-[#F8FAFC] inline-flex items-center gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" style={{ animationDelay: '0ms' }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" style={{ animationDelay: '150ms' }} />
-        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-pulse" style={{ animationDelay: '300ms' }} />
-      </div>
-    </div>
-  )
-}
-
-// ─── Resizable split hook ───────────────────────────────────────────────────
-// Tracks the chat-panel height in px. Drag the handle between dashboard and
-// chat to resize. Min 140 (just enough for input + a couple of bubbles), max
-// 80% of the canvas height. Default 280 (enough for 3-4 messages).
-function useResizableChat(containerRef) {
-  const [chatHeight, setChatHeight] = useState(280)
-  const draggingRef = useRef(false)
-
-  const onPointerDown = useCallback((e) => {
-    e.preventDefault()
-    draggingRef.current = true
-    document.body.style.cursor = 'row-resize'
-    document.body.style.userSelect = 'none'
-  }, [])
-
-  useEffect(() => {
-    function onMove(e) {
-      if (!draggingRef.current) return
-      const rect = containerRef.current?.getBoundingClientRect()
-      if (!rect) return
-      const total = rect.height
-      const newChat = total - (e.clientY - rect.top)
-      const min = 140
-      const max = Math.max(min, total * 0.8)
-      setChatHeight(Math.min(max, Math.max(min, newChat)))
-    }
-    function onUp() {
-      if (!draggingRef.current) return
-      draggingRef.current = false
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-  }, [containerRef])
-
-  return { chatHeight, onPointerDown }
-}
-
 // ─── Main canvas ────────────────────────────────────────────────────────────
 export default function KpiInsightCanvas({ context }) {
-  const { role, userProfile } = useApp()
+  const { role, userProfile, openCanvas } = useApp()
   const profile = userProfile || {}
 
   const computed = useMemo(() => {
@@ -494,14 +363,9 @@ export default function KpiInsightCanvas({ context }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
-  const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
   const containerRef = useRef(null)
-  const { chatHeight, onPointerDown } = useResizableChat(containerRef)
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, typing])
+  const { chatHeight, onPointerDown } = useResizableChat(containerRef, 280)
 
   useEffect(() => {
     setMessages([])
@@ -525,19 +389,49 @@ export default function KpiInsightCanvas({ context }) {
   const breakdown = getBreakdown(role, kpi)
   const details = getDetailsFor(kpi, role, profile, computed)
 
-  function send(text) {
+  async function send(text) {
     const t = String(text || '').trim()
     if (!t) return
     const userMsg = { id: Date.now(), role: 'user', text: t, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-    setMessages(prev => [...prev, userMsg])
+    const nextMessages = [...messages, userMsg]
+    setMessages(nextMessages)
     setInput('')
     setTyping(true)
-    setTimeout(() => {
+    try {
+      // Build the data block the model will see. Keep it tight — just the
+      // numbers and lists actually visible on this canvas right now.
+      const chatData = {
+        kpi: { id: kpi.id, name: kpi.shortName, framework: kpi.framework, domain: kpi.domain, unit: kpi.unit },
+        value, status, benchmark: computed.benchmark, delta: computed.delta, reason,
+        breakdown,
+        details,   // student_list, entity_list, etc.
+      }
+      const apiMessages = nextMessages.map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.role === 'user' ? m.text : (m.markdown || ''),
+      }))
+      const { text: replyText, cards } = await fetchCanvasReply({
+        role, profile,
+        canvas: { title: kpi.shortName, subtitle: `${kpi.framework} · ${kpi.domain}` },
+        data: chatData,
+        messages: apiMessages,
+      })
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, role: 'bot',
+        markdown: replyText,
+        html: mdToHtml(replyText),
+        cards,
+      }])
+    } catch (err) {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, role: 'bot',
+        html: `<div style="color:#B91C1C;font-size:12.5px">Couldn't reach Saathi. ${escapeForHtml(err?.message || String(err))}</div>`,
+      }])
+    } finally {
       setTyping(false)
-      const botMsg = { id: Date.now() + 1, role: 'bot', html: mockBotHtml(kpi, role, t, computed) }
-      setMessages(prev => [...prev, botMsg])
-    }, 650)
+    }
   }
+  function escapeForHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') }
 
   // Used by the per-chart ✨ Ask AI button. Pre-fills the input (so the user
   // can edit before sending) and focuses it. The chat panel grows
@@ -545,13 +439,6 @@ export default function KpiInsightCanvas({ context }) {
   function askAboutChart(prompt) {
     setInput(prompt)
     setTimeout(() => inputRef.current?.focus(), 30)
-  }
-
-  function onKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send(input)
-    }
   }
 
   return (
@@ -595,12 +482,16 @@ export default function KpiInsightCanvas({ context }) {
             now right here on the same canvas). */}
         {details && <DetailsRenderer details={details} onAsk={askAboutChart} />}
 
-        {/* Admin-only: 7-day trend chart */}
-        {showCharts && (
-          <ChartCard title="7-day trend" askPrompt={`Why is the ${kpi.shortName.toLowerCase()} trend like this?`} onAsk={askAboutChart}>
-            <TrendChart endValue={typeof value === 'number' ? value : 70} status={status} />
-          </ChartCard>
-        )}
+        {/* 7-day trend — now interactive (hover for date + value tooltip).
+            Shown for every role on this canvas, not just admins, because
+            the user explicitly asked for it on the teacher view too. */}
+        <ChartCard title="7-day trend" askPrompt={`Why is the ${kpi.shortName.toLowerCase()} trend like this?`} onAsk={askAboutChart}>
+          <InteractiveTrendChart
+            values={build7DaySeries(typeof value === 'number' ? value : 70)}
+            status={status}
+            unit={kpi.unit === '%' ? '%' : kpi.unit === 'hours' ? ' hrs' : ''}
+          />
+        </ChartCard>
 
         {/* Admin-only: breakdown bars */}
         {showCharts && (
@@ -640,94 +531,26 @@ export default function KpiInsightCanvas({ context }) {
         </div>
       </div>
 
-      {/* ─── Drag handle (resize chat panel up/down) ─────────────────────── */}
-      <div
-        onPointerDown={onPointerDown}
-        title="Drag to resize chat"
-        style={{
-          height: 12,
-          background: '#F8FAFC',
-          borderTop: '1px solid #E5E7EB',
-          borderBottom: '1px solid #E5E7EB',
-          cursor: 'row-resize',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
-        }}
-      >
-        <GripHorizontal size={14} color="#7383A5" />
-      </div>
-
-      {/* ─── Bottom: chat (height controlled by drag handle) ─────────────── */}
-      <div
-        className="flex flex-col"
-        style={{
-          height: chatHeight,
-          flexShrink: 0,
-          borderColor: '#E5E7EB',
-          background: '#FFFFFF',
-        }}
-      >
-        {/* Quick-ask chips */}
-        <div className="px-4 pt-3 pb-2 flex flex-wrap gap-1.5 flex-shrink-0">
-          {chips.map(c => (
-            <button
-              key={c}
-              onClick={() => send(c)}
-              className="active:scale-95 transition-all"
-              style={{
-                fontSize: 11.5, fontWeight: 600, color: '#386AF6',
-                padding: '5px 12px', borderRadius: 999,
-                border: '1px solid #C7D2FE', background: '#FFFFFF',
-                fontFamily: FONT, cursor: 'pointer',
-              }}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
-        {/* Messages — flex-1 so they expand to fill whatever the resize gave us. */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 min-h-0" style={{ background: '#F8FAFC' }}>
-          {messages.length === 0 && !typing && (
-            <div style={{ fontSize: 12, color: '#7383A5', textAlign: 'center', padding: '12px 8px' }}>
-              Use a chip above, click an ✨ Ask AI button on any chart, or type a question below.
-            </div>
-          )}
-          {messages.map(m => <Bubble key={m.id} message={m} />)}
-          {typing && <Typing />}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input */}
-        <div className="px-3 py-2 flex items-center gap-2 flex-shrink-0" style={{ borderTop: '1px solid #E5E7EB' }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder={`Ask about ${kpi.shortName.toLowerCase()}…`}
-            className="flex-1 outline-none"
-            style={{
-              padding: '9px 14px', borderRadius: 999,
-              border: '1px solid #D5D8DF', background: '#FFFFFF',
-              fontSize: 13, color: '#0E0E0E', fontFamily: FONT,
-            }}
-          />
-          <button
-            onClick={() => send(input)}
-            disabled={!input.trim()}
-            className="w-9 h-9 flex items-center justify-center rounded-full active:scale-95 transition-all"
-            style={{
-              background: input.trim() ? '#386AF6' : '#E5E7EB',
-              color: '#FFFFFF', cursor: input.trim() ? 'pointer' : 'default',
-              border: 'none', flexShrink: 0,
-            }}
-          >
-            <Send size={16} />
-          </button>
-        </div>
-      </div>
+      {/* Drag handle + chat panel are shared (same UX across all canvases). */}
+      <DragHandle onPointerDown={onPointerDown} />
+      <ChatPanel
+        chatHeight={chatHeight}
+        chips={chips}
+        messages={messages}
+        typing={typing}
+        onSend={send}
+        input={input}
+        setInput={setInput}
+        inputRef={inputRef}
+        placeholder={`Ask about ${kpi.shortName.toLowerCase()}…`}
+        onOpenStudent={({ ssmid, name }) => openCanvas({
+          type: 'student-profile',
+          studentId: ssmid,
+          studentName: name,
+          from: 'kpi_insight',
+          kpiId: kpi.id,
+        })}
+      />
     </div>
   )
 }
