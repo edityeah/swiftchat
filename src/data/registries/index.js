@@ -97,11 +97,17 @@ export function teachersInSchool(schoolId) {
   return TEACHERS.filter(t => t.schoolId === schoolId)
 }
 
-// Look up by teacher code (8-digit). Accepts string or number.
+// Look up by teacher code. Accepts string or number. Checks real TEACHERS
+// first, then falls back to the synth cache (populated by teachersForScope
+// whenever a scope is queried — so any synth teacher the user has already
+// seen in a registry canvas is findable here).
+const _synthTeacherCache = new Map()
 export function findTeacherByCode(code) {
   if (code == null) return null
   const n = Number(code)
-  return TEACHERS.find(t => t.teacherCode === n || String(t.teacherCode) === String(code)) || null
+  const real = TEACHERS.find(t => t.teacherCode === n || String(t.teacherCode) === String(code))
+  if (real) return real
+  return _synthTeacherCache.get(n) || _synthTeacherCache.get(String(code)) || null
 }
 
 // ─── Teacher synthesis (single source of truth across home + canvas) ────────
@@ -197,13 +203,17 @@ export function teachersForScope({ cluster, block, district, schoolId } = {}, op
 
   // 4. Synthesise the difference. Each synth teacher is tied deterministically
   //    to a real school in scope so the school/cluster/block/district fields
-  //    line up.
+  //    line up. Also cache by teacherCode so findTeacherByCode can resolve
+  //    them later (e.g. when the user clicks Open Profile on a synth row).
   const out = [...real]
   const baseSeed = _strHash(`${cluster || ''}|${block || ''}|${district || ''}|${schoolId || ''}`)
   const needed = target - real.length
   for (let i = 0; i < needed; i++) {
     const school = schools[i % schools.length]
-    out.push(_synthTeacher(baseSeed + i * 7919, school))
+    const t = _synthTeacher(baseSeed + i * 7919, school)
+    _synthTeacherCache.set(t.teacherCode, t)
+    _synthTeacherCache.set(String(t.teacherCode), t)
+    out.push(t)
   }
   return out
 }
@@ -282,11 +292,16 @@ export function schoolsForScope({ cluster, block, district } = {}, opts = {}) {
   // Use the first real school as the "shape" for synth (preserves district/
   // block/cluster fields).
   const parent = real[0]
+  // Cache synth schools by schoolid so findSchoolById can resolve them
+  // when the user clicks "Open profile" on a synth row.
   const out = [...real]
   const baseSeed = _strHash(`${cluster || ''}|${block || ''}|${district || ''}`)
   const needed = target - real.length
   for (let i = 0; i < needed; i++) {
-    out.push(_synthSchool(baseSeed + i * 9931, parent))
+    const sc = _synthSchool(baseSeed + i * 9931, parent)
+    _synthSchoolCache.set(sc.schoolid, sc)
+    _synthSchoolCache.set(String(sc.schoolid), sc)
+    out.push(sc)
   }
   return out
 }
@@ -348,10 +363,16 @@ function _phone18(seed) {
   return `${start}${tail[0]}${tail[1]} •• ${tail.slice(-4)}`
 }
 
+// Same cache pattern as findTeacherByCode — falls back to synth school
+// cache so users can open profiles for synthesised schools they saw in a
+// canvas list.
+const _synthSchoolCache = new Map()
 export function findSchoolById(schoolId) {
   if (schoolId == null) return null
   const n = Number(schoolId)
-  return SCHOOLS.find(s => s.schoolid === n || String(s.schoolid) === String(schoolId)) || null
+  const real = SCHOOLS.find(s => s.schoolid === n || String(s.schoolid) === String(schoolId))
+  if (real) return real
+  return _synthSchoolCache.get(n) || _synthSchoolCache.get(String(schoolId)) || null
 }
 
 // Build a deep school profile: identity + posting + headmaster + behavioural
