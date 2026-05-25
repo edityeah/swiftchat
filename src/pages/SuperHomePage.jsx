@@ -1865,8 +1865,21 @@ function WelcomeScreen({ botName, onChip, role, profile, onOpenCanvas }) {
         <div className="grid grid-cols-4 gap-3 mb-8">
           {actions.map((item, i) => {
             const Icon = item.icon
+            const handle = () => {
+              // Quick Actions may either open a canvas directly (new pattern,
+              // used by Ask AI → AskAiCanvas) or send a chat trigger (legacy).
+              if (item.canvas && typeof onOpenCanvas === 'function') {
+                onOpenCanvas(item.canvas)
+              } else if (item.trigger === 'Task: ask_ai' && typeof onOpenCanvas === 'function') {
+                // Backwards-compat: existing role tables still use trigger
+                // 'Task: ask_ai'. Route it to the Ask AI canvas regardless.
+                onOpenCanvas({ type: 'ask_ai' })
+              } else {
+                onChip(item.trigger)
+              }
+            }
             return (
-              <button key={i} onClick={() => onChip(item.trigger)}
+              <button key={i} onClick={handle}
                 className="flex flex-col items-center justify-center gap-2 py-4 px-2 active:scale-95 transition-all duration-150 hover:shadow-md"
                 style={{ background: item.bg, borderRadius: 12, border: '1px solid #D5D8DF' }}>
                 <div className="w-10 h-10 flex items-center justify-center" style={{ background: item.fg + '22', borderRadius: 8 }}>

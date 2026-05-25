@@ -19,6 +19,7 @@ import KpiInsightCanvas        from './modules/KpiInsightCanvas'
 import EntityRegistryCanvas    from './modules/EntityRegistryCanvas'
 import TeacherAttendanceCanvas from './modules/TeacherAttendanceCanvas'
 import AttendanceDashboardCanvas from './modules/AttendanceDashboardCanvas'
+import AskAiCanvas from './modules/AskAiCanvas'
 // Legacy canvas tabs (fallback for old chatId-based canvas)
 import RichTextEditor    from './RichTextEditor'
 import DataForm          from './DataForm'
@@ -55,6 +56,7 @@ const MODULE_META = {
     ctx.scope === 'block' ? 'Attendance — Block' :
     ctx.scope === 'cluster' ? 'Attendance — Cluster' :
     ctx.scope === 'school' ? 'Attendance — School' : 'Attendance dashboard' },
+  'ask_ai': { icon: '✨', title: () => 'Ask AI · Saathi' },
   digivritti:  { icon: '🌸', title: ctx => {
     const scheme = ctx.scheme && ctx.scheme !== 'all' ? ` — ${SCHEME_TITLE[ctx.scheme] || ctx.scheme}` : ''
     if (ctx.view === 'apply')          return `DigiVritti${scheme} · New Application`
@@ -223,6 +225,7 @@ export default function CanvasPanel() {
               {ctx.type === 'registry'    && <EntityRegistryCanvas context={ctx} />}
               {ctx.type === 'teacher-attendance' && <TeacherAttendanceCanvas context={ctx} />}
               {ctx.type === 'attendance-dashboard' && <AttendanceDashboardCanvas context={ctx} />}
+              {ctx.type === 'ask_ai' && <AskAiCanvas context={ctx} />}
             </>
           ) : (
             <>
