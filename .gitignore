@@ -40,3 +40,4 @@ student_*.csv
 
 # Claude preview tool's local config (per-machine only)
 .claude/
+.vercel

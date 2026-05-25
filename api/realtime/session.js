@@ -80,21 +80,43 @@ export default async function handler(req, res) {
   // `verse` and `ballad` are the warmest OpenAI voices for Indian-English.
   const voice = process.env.OPENAI_REALTIME_VOICE || 'verse'
 
+  // GA Realtime API payload shape (Aug 2025+). The old beta nested fields
+  // flat under the body and posted to /v1/realtime/sessions. The GA endpoint
+  // wraps the whole thing under a `session` envelope, puts modalities in
+  // `output_modalities`, and nests transcription + turn_detection inside an
+  // `audio` block. Voice now lives at `audio.output.voice`.
+  const sessionConfig = {
+    type: 'realtime',
+    model,
+    instructions,
+    output_modalities: ['audio'],
+    audio: {
+      input: {
+        transcription: { model: 'whisper-1' },
+        turn_detection: {
+          type: 'server_vad',
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 500,
+          create_response: true,
+          interrupt_response: true,
+        },
+      },
+      output: { voice },
+    },
+  }
+
   try {
-    const r = await fetch('https://api.openai.com/v1/realtime/sessions', {
+    // GA endpoint: /v1/realtime/client_secrets. Old /v1/realtime/sessions
+    // was retired Aug 2025 and now returns "Realtime Beta API is no longer
+    // supported."
+    const r = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model,
-        voice,
-        instructions,
-        modalities: ['audio', 'text'],
-        input_audio_transcription: { model: 'whisper-1' },
-        turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 500 },
-      }),
+      body: JSON.stringify({ session: sessionConfig }),
     })
 
     if (!r.ok) {
@@ -102,12 +124,16 @@ export default async function handler(req, res) {
       return res.status(r.status).json({ error: 'openai_session_failed', detail })
     }
 
-    const session = await r.json()
+    const minted = await r.json()
+    // GA response is flat: { value, expires_at, session }. Old beta nested
+    // it under `client_secret.value` — handle both for forward-compat.
+    const clientSecret = minted.value || minted.client_secret?.value
+    const expiresAt    = minted.expires_at || minted.client_secret?.expires_at
     return res.status(200).json({
-      client_secret: session.client_secret?.value,
-      expires_at:    session.client_secret?.expires_at,
-      model:         session.model || model,
-      voice:         session.voice || voice,
+      client_secret: clientSecret,
+      expires_at:    expiresAt,
+      model:         minted.session?.model || model,
+      voice,
     })
   } catch (err) {
     return res.status(500).json({ error: 'session_request_failed', detail: String(err?.message || err) })

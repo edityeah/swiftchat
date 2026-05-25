@@ -5,7 +5,10 @@ import CallOverlay from './components/CallOverlay'
 import CanvasPanel from './canvas/CanvasPanel'
 import NotificationToast from './components/notifications/NotificationToast'
 import { VoiceCallProvider } from './voice/VoiceCallProvider'
-import VoiceCallOverlay from './voice/VoiceCallOverlay'
+// VoiceCallOverlay (floating popup) is intentionally not mounted —
+// the controls now live inline in the home top bar (see SuperHomePage
+// → InlineCallControls). Keeping the import commented as a pointer.
+// import VoiceCallOverlay from './voice/VoiceCallOverlay'
 
 import SplashPage        from './pages/SplashPage'
 import LoginPage         from './pages/LoginPage'
@@ -106,7 +109,6 @@ function AppRoutes() {
         <CanvasPanel />
         <Toast />
         <NotificationToast />
-        <VoiceCallOverlay />
       </div>
     </div>
   )

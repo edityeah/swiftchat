@@ -206,7 +206,10 @@ export function VoiceCallProvider({ children }) {
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
 
-      const sdpResp = await fetch(`https://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`, {
+      // GA Realtime SDP endpoint is /v1/realtime/calls (model passed as query
+      // param). The old beta /v1/realtime path now returns "Realtime Beta API
+      // is no longer supported."
+      const sdpResp = await fetch(`https://api.openai.com/v1/realtime/calls?model=${encodeURIComponent(model)}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${client_secret}`,

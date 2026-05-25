@@ -30,7 +30,7 @@ import { isRemoteEnabled } from '../nlp/groqInterpreter'
 import { aiAnswerCardHtml } from '../nlp/aiAnswerCard'
 import NotificationBell from '../components/notifications/NotificationBell'
 import { useVoiceCall } from '../voice/VoiceCallProvider'
-import { Phone as PhoneIcon } from 'lucide-react'
+import { Phone as PhoneIcon, Mic, MicOff, Monitor, MonitorOff } from 'lucide-react'
 import {
   buildAskAiGreeting, buildAskAiNextChips, runAskAiPrompt,
   processAskAiQuery, buildAskAiFallback,
@@ -99,7 +99,7 @@ function CallAgentButton() {
       title={isLive ? 'End voice call' : 'Call Saathi (voice agent)'}
       style={{
         width: 36, height: 36, borderRadius: 999, marginRight: 6,
-        background: isLive ? '#B91C1C' : '#10B981',
+        background: isLive ? '#B91C1C' : '#386AF6',
         color: '#FFFFFF', border: 'none', cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: isLive ? '0 0 0 0 rgba(185, 28, 28, 0.5)' : 'none',
@@ -108,6 +108,89 @@ function CallAgentButton() {
     >
       <PhoneIcon size={16} />
     </button>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inline voice-call controls — render to the LEFT of the call button while a
+// call is active. Mic toggle, screen-share toggle, and a small status pill.
+// No popup, no floating panel — just buttons sitting in the topbar.
+// ─────────────────────────────────────────────────────────────────────────────
+function InlineCallControls() {
+  const v = useVoiceCall?.()
+  if (!v) return null
+  const {
+    status, muted, agentSpeaking, screenSharing,
+    toggleMute, startScreenShare, stopScreenShare,
+  } = v
+  if (status === 'idle') return null
+
+  const statusText = (() => {
+    if (status === 'connecting') return 'Connecting…'
+    if (status === 'ending')     return 'Ending…'
+    if (status === 'error')      return 'Error'
+    if (agentSpeaking)           return 'Speaking…'
+    if (muted)                   return 'Muted'
+    return 'Listening'
+  })()
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      padding: '2px 6px 2px 10px',
+      marginRight: 6,
+      borderRadius: 999,
+      background: '#F4F6FA',
+      border: '1px solid #D5D8DF',
+      fontFamily: 'Montserrat, sans-serif',
+    }}>
+      {/* Pulsing dot + status label */}
+      <span style={{
+        width: 7, height: 7, borderRadius: 999,
+        background: agentSpeaking ? '#10B981' : status === 'error' ? '#B91C1C' : '#386AF6',
+        animation: status === 'connected' ? 'pulse-ring 1.6s ease-out infinite' : 'none',
+        flexShrink: 0,
+      }} />
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: '#0E0E0E', marginRight: 2 }}>
+        {statusText}
+      </span>
+
+      {/* Mic toggle */}
+      <button
+        onClick={toggleMute}
+        title={muted ? 'Unmute' : 'Mute'}
+        disabled={status !== 'connected'}
+        style={{
+          width: 28, height: 28, borderRadius: 999,
+          border: '1px solid ' + (muted ? '#FECACA' : '#D5D8DF'),
+          background: muted ? '#FEE2E2' : '#FFFFFF',
+          color:      muted ? '#B91C1C' : '#0E0E0E',
+          cursor: status === 'connected' ? 'pointer' : 'default',
+          opacity: status === 'connected' ? 1 : 0.5,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        {muted ? <MicOff size={13} /> : <Mic size={13} />}
+      </button>
+
+      {/* Screen-share toggle */}
+      <button
+        onClick={screenSharing ? stopScreenShare : startScreenShare}
+        title={screenSharing ? 'Stop sharing' : 'Share screen'}
+        disabled={status !== 'connected'}
+        style={{
+          width: 28, height: 28, borderRadius: 999,
+          border: '1px solid ' + (screenSharing ? '#FDE68A' : '#D5D8DF'),
+          background: screenSharing ? '#FEF3C7' : '#FFFFFF',
+          color:      screenSharing ? '#92400E' : '#0E0E0E',
+          cursor: status === 'connected' ? 'pointer' : 'default',
+          opacity: status === 'connected' ? 1 : 0.5,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        {screenSharing ? <MonitorOff size={13} /> : <Monitor size={13} />}
+      </button>
+    </div>
   )
 }
 
@@ -2605,12 +2688,20 @@ export default function SuperHomePage() {
           actions: directive.actions,
           progress: directive.progress,
         })
-        // Open the chart canvas alongside the chat. Every Ask AI prompt
-        // gets a canvas — the query engine returns either a chart (best),
-        // a table / KPI grid, or an InfoCard fallback. The chat keeps its
-        // own rich response visible on the left.
+        // Open the chart canvas ONLY when the underlying answer is a real
+        // visualization (chart / table / kpi_grid). For plain text-only
+        // "info" cards there is nothing to show on a dashboard, so the
+        // chat-side response is enough — duplicating it into the canvas
+        // just looks redundant.
         if (directive.userBubble) {
-          openCanvas({ type: 'ask_ai', prompt: directive.userBubble, role })
+          let isVisual = false
+          try {
+            const { card } = answerAskAiChart(directive.userBubble) || {}
+            isVisual = !!card && card.type !== 'info'
+          } catch { /* if engine throws, default to chat-only */ }
+          if (isVisual) {
+            openCanvas({ type: 'ask_ai', prompt: directive.userBubble, role })
+          }
         }
         return
       }
@@ -2655,10 +2746,19 @@ export default function SuperHomePage() {
               actions: directive.actions,
               progress: directive.progress,
             })
-            // Mirror prompt-click behaviour: any matched prompt opens the
-            // chart canvas with the prompt text as seed.
+            // Mirror prompt-click behaviour, but only open the canvas
+            // when the answer is a visualization (chart / table / kpi).
+            // Info-only cards stay in chat — no point opening an empty
+            // dashboard for a text bullet list.
             const seed = directive.userBubble || text
-            openCanvas({ type: 'ask_ai', prompt: seed, role })
+            let isVisual = false
+            try {
+              const { card } = answerAskAiChart(seed) || {}
+              isVisual = !!card && card.type !== 'info'
+            } catch { /* default chat-only on engine error */ }
+            if (isVisual) {
+              openCanvas({ type: 'ask_ai', prompt: seed, role })
+            }
             return
           }
         }
@@ -3319,6 +3419,7 @@ export default function SuperHomePage() {
 
           <div className="flex-1" />
 
+          <InlineCallControls />
           <CallAgentButton />
           <NotificationBell />
         </div>
