@@ -1,275 +1,439 @@
-import React, { useMemo } from 'react'
-import { AlertTriangle, Phone, MessageSquare, BookOpen, Bell, Users } from 'lucide-react'
+import React, { useMemo, useRef, useState } from 'react'
+import { AlertTriangle, Filter as FilterIcon } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
-import { AT_RISK_STUDENTS } from '../../data/mockData'
+import { STUDENTS } from '../../data/mockData'
+import { getAtRiskCohort } from '../../data/atRiskData'
+import {
+  ChartCard, DragHandle, useResizableChat, ChatPanel,
+  fetchCanvasReply, mdToHtml,
+} from '../shared/kpiCanvasShared'
 
-// At-Risk Students canvas — opens when the teacher taps the "AT RISK" home
-// stat tile. Renders the 3 high-risk students with parent contact details,
-// risk level, attendance, dropout signals, and the same CTAs Ask AI shows
-// for the after-school cohort: create intervention, generate lesson plan,
-// send parent alerts, create reminder.
+const FONT = 'Montserrat, sans-serif'
 
-// Curated parent contacts for the AT_RISK_STUDENTS demo set so the canvas
-// can show "who to call" without depending on the full STUDENTS roster.
-const PARENT_CONTACTS = {
-  'Ravi Patel':    { parent: 'Mehul Patel',    phone: '+91 98765 50121', region: 'Mehsana · Class 8' },
-  'Dhruv Vaghela': { parent: 'Rekha Vaghela',  phone: '+91 98765 50122', region: 'Mehsana · Class 8' },
-  'Harsh Bhatt':   { parent: 'Bhavna Bhatt',   phone: '+91 98765 50123', region: 'Mehsana · Class 8' },
-  'Komal Patel':   { parent: 'Kiran Patel',    phone: '+91 98765 50124', region: 'Mehsana · Class 8' },
-  'Hetal Chauhan': { parent: 'Pankaj Chauhan', phone: '+91 98765 50125', region: 'Mehsana · Class 8' },
-  'Jay Prajapati': { parent: 'Nilesh Prajapati', phone: '+91 98765 50116', region: 'Mehsana · Class 6' },
+// ─── Atoms ─────────────────────────────────────────────────────────────────
+function StatPill({ label, value, tone = 'neutral', active, onClick }) {
+  const tones = {
+    urgent:  { bg: '#FEE2E2', fg: '#B91C1C', bd: '#FECACA' },
+    high:    { bg: '#FEF3C7', fg: '#92400E', bd: '#FDE68A' },
+    medium:  { bg: '#DBEAFE', fg: '#1E3A8A', bd: '#BFDBFE' },
+    low:     { bg: '#D1FAE5', fg: '#065F46', bd: '#A7F3D0' },
+    neutral: { bg: '#F1F5F9', fg: '#0E0E0E', bd: '#E5E7EB' },
+  }
+  const t = tones[tone] || tones.neutral
+  return (
+    <button
+      onClick={onClick}
+      className="active:scale-95 transition-all"
+      style={{
+        flex: 1, minWidth: 0,
+        padding: '10px 12px', borderRadius: 12,
+        background: t.bg, color: t.fg,
+        border: `${active ? 2 : 1}px solid ${active ? t.fg : t.bd}`,
+        cursor: onClick ? 'pointer' : 'default',
+        textAlign: 'left', fontFamily: FONT,
+      }}
+    >
+      <div style={{ fontSize: 22, fontWeight: 700, lineHeight: '24px' }}>{value}</div>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 2 }}>
+        {label}
+      </div>
+    </button>
+  )
 }
 
-// Risk-level → dropout-likelihood label used on the row pill. Maps the
-// existing AT_RISK_STUDENTS.risk values onto the user-friendly four-tier
-// labels: Urgent / High / Medium / Low.
-function riskLabel(risk, attendance) {
-  if (risk === 'high' && attendance < 60) return { label: 'Urgent', bg: '#FFEBEE', fg: '#B71C1C', accent: '#B71C1C' }
-  if (risk === 'high')                    return { label: 'High',   bg: '#FFEBEE', fg: '#C62828', accent: '#C62828' }
-  if (risk === 'medium')                  return { label: 'Medium', bg: '#FFF3CC', fg: '#9A6500', accent: '#F8B200' }
-  return { label: 'Low', bg: '#E8F5E9', fg: '#2E7D32', accent: '#16A34A' }
+function BarRow({ label, value, max, accent = '#386AF6', suffix = '%' }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[11px]" style={{ fontFamily: FONT }}>
+        <span style={{ color: '#0E0E0E', fontWeight: 600 }}>{label}</span>
+        <span style={{ color: '#7383A5' }}>{value}{suffix}</span>
+      </div>
+      <div className="h-2 rounded-full mt-1" style={{ background: '#F1F5F9' }}>
+        <div className="h-full rounded-full" style={{ width: `${(value / max) * 100}%`, background: accent }} />
+      </div>
+    </div>
+  )
 }
 
-function dropoutSignal(student) {
-  if (student.attendance < 60)               return 'Likely to drop out within 4 weeks'
-  if (student.attendance < 70)               return 'Dropout risk rising — needs follow-up this week'
-  if (student.risk === 'high')               return 'Repeated absence pattern — verify reason'
-  if (student.risk === 'medium')             return 'Declining trend — preventive support'
-  return 'Monitoring'
+function DonutChart({ label, value, color }) {
+  const r = 28, c = 2 * Math.PI * r
+  const dash = (value / 100) * c
+  return (
+    <div className="flex items-center gap-3">
+      <svg width={72} height={72} viewBox="0 0 72 72">
+        <circle cx={36} cy={36} r={r} fill="none" stroke="#F1F5F9" strokeWidth={8} />
+        <circle cx={36} cy={36} r={r} fill="none" stroke={color} strokeWidth={8}
+          strokeDasharray={`${dash} ${c}`} strokeLinecap="round"
+          transform="rotate(-90 36 36)" />
+        <text x={36} y={40} textAnchor="middle" style={{ fontSize: 13, fontWeight: 700, fill: '#0E0E0E', fontFamily: FONT }}>
+          {value}%
+        </text>
+      </svg>
+      <div style={{ fontSize: 12, color: '#0E0E0E', fontWeight: 600, fontFamily: FONT }}>{label}</div>
+    </div>
+  )
 }
 
-// ── KPI filter helpers ────────────────────────────────────────────────────────
-// AT_RISK_STUDENTS shape: { name, grade, attendance, score, risk, reason, days }
-// Subject scores (math/sci/guj/level) don't exist — use score+risk as proxy.
-const SCHOOL_LEVEL_FILTERS = new Set(['schools_below_benchmark', 'low_performing_schools'])
-
-function applyAtRiskFilter(students, filterMode, threshold) {
-  if (!filterMode) return students
-  const thr = threshold ?? 40
-  if (filterMode === 'chronic_absent')        return students.filter(s => s.attendance < 60 || s.risk === 'high')
-  if (filterMode === 'below_proficiency')     return students.filter(s => s.score < thr)
-  if (filterMode === 'assessment_absent')     return students.filter(s => s.score == null)
-  if (filterMode === 'ews_pending_followup')  return students.filter(s => s.risk === 'high')
-  if (filterMode === 'module_incomplete')     return students.slice(0, 6)
-  if (filterMode === 'identified_remediation')return students.filter(s => s.risk === 'high' || s.score < 50)
-  if (filterMode === 'remediation_not_started')return students.filter(s => s.risk === 'high' || s.score < 50)
-  if (SCHOOL_LEVEL_FILTERS.has(filterMode))   return students  // handled via banner
-  return students
+function PredictorBars({ rows }) {
+  const max = Math.max(...rows.map(r => r.pct), 1)
+  return (
+    <div className="space-y-2">
+      {rows.map((r, i) => (
+        <BarRow key={i} label={r.label} value={r.pct} max={max} accent="#F59E0B" suffix="%" />
+      ))}
+    </div>
+  )
 }
 
+function StackedCategoryBar({ rows }) {
+  const total = rows.reduce((a, r) => a + r.count, 0) || 1
+  const colors = ['#3B82F6', '#F59E0B', '#10B981', '#EF4444']
+  return (
+    <div>
+      <div className="h-7 rounded-md overflow-hidden flex" style={{ border: '1px solid #E5E7EB' }}>
+        {rows.map((r, i) => (
+          <div key={i} title={`${r.label}: ${r.pct}%`}
+            style={{ width: `${(r.count / total) * 100}%`, background: colors[i % colors.length], color: '#FFFFFF', fontSize: 10.5, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: r.pct > 5 ? 'auto' : 0 }}>
+            {r.pct > 8 ? `${r.label} ${r.pct}%` : ''}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-3">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: colors[i % colors.length] }} />
+            <span style={{ fontSize: 10.5, color: '#0E0E0E', fontWeight: 600 }}>{r.label} · {r.pct}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Main canvas ───────────────────────────────────────────────────────────
 export default function AtRiskStudentsCanvas({ context }) {
-  const { closeCanvas, openCanvas, openNotificationsCanvas, showToast } = useApp()
-  const focusGrade = context?.grade || 8
-  const filterMode = context?.filter || null
-  const threshold  = context?.threshold ?? null
+  const { role, userProfile, openCanvas, openNotificationsCanvas, showToast } = useApp()
+  const profile = userProfile || {}
+  const containerRef = useRef(null)
+  const inputRef = useRef(null)
+  const { chatHeight, onPointerDown } = useResizableChat(containerRef, 240)
 
-  const allStudents = useMemo(() => {
-    const list = (AT_RISK_STUDENTS || []).filter(s => !focusGrade || s.grade === focusGrade)
-    return list.length ? list : (AT_RISK_STUDENTS || [])
-  }, [focusGrade])
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [typing, setTyping] = useState(false)
 
-  const students = useMemo(
-    () => applyAtRiskFilter(allStudents, filterMode, threshold),
-    [allStudents, filterMode, threshold]
+  // Role-aware filter state. Each filter only applies to scopes that
+  // surface it; the others are no-ops at the data layer.
+  const [grade, setGrade]         = useState(context?.grade || 'all')
+  const [tierFilter, setTierFilter] = useState(null)
+  // CRC/BEO/DEO/State: future filter expansion (school, cluster, block) —
+  // kept as state stubs so the UI can already render the controls.
+
+  const cohort = useMemo(() => getAtRiskCohort(role, profile, {
+    grade, tierFilter,
+    school: context?.school, cluster: context?.cluster, block: context?.block, district: context?.district,
+  }), [role, profile, grade, tierFilter, context])
+
+  const { scope, scopeLabel, atRisk, students, breakdowns, totalStudents } = cohort
+
+  const availableGrades = useMemo(
+    () => Object.keys(STUDENTS).map(Number).sort((a, b) => a - b),
+    [],
   )
 
-  const counts = useMemo(() => {
-    const by = { Urgent: 0, High: 0, Medium: 0, Low: 0 }
-    students.forEach(s => { by[riskLabel(s.risk, s.attendance).label]++ })
-    return by
-  }, [students])
+  // What chat sees — exactly what's on screen.
+  const chatData = useMemo(() => ({
+    scope, scopeLabel, role,
+    totalStudents, atRisk,
+    activeFilters: { grade, tierFilter },
+    breakdowns: {
+      gender:    breakdowns.gender,
+      category:  breakdowns.category,
+      classWise: breakdowns.classWise,
+      schoolWise: breakdowns.schoolWise,
+      districtWise: breakdowns.districtWise,
+      predictors: breakdowns.predictors,
+    },
+    // Cap the student list sent to OpenAI — 25 rows is enough to answer any
+    // question without bloating the prompt.
+    students: students.slice(0, 25).map(s => ({
+      name: s.name, ssmid: s.id || s.ssmid, grade: s.grade, section: s.section,
+      attendance: s.attendance, risk: s.risk, ewsFlag: s.ewsFlag,
+      math: s.math, sci: s.sci, guj: s.guj,
+      gender: s.gender === 'F' ? 'Female' : 'Male',
+      socialCategory: s.socialCategory,
+    })),
+  }), [scope, scopeLabel, role, totalStudents, atRisk, breakdowns, students, grade, tierFilter])
 
-  const studentNames = students.map(s => s.name)
-
-  const handleCreateIntervention = () => {
+  async function send(text) {
+    const t = String(text || '').trim()
+    if (!t) return
+    const userMsg = { id: Date.now(), role: 'user', text: t }
+    const next = [...messages, userMsg]
+    setMessages(next)
+    setInput('')
+    setTyping(true)
+    try {
+      const apiMessages = next.map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.role === 'user' ? m.text : (m.markdown || ''),
+      }))
+      const { text: replyText, cards } = await fetchCanvasReply({
+        role, profile,
+        canvas: { title: 'At-Risk Students · Early Warning System', subtitle: scopeLabel },
+        data: chatData,
+        messages: apiMessages,
+      })
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'bot', markdown: replyText, html: mdToHtml(replyText), cards }])
+    } catch (err) {
+      const safe = String(err?.message || err).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      setMessages(prev => [...prev, { id: Date.now() + 1, role: 'bot', html: `<div style="color:#B91C1C;font-size:12.5px">Couldn't reach Saathi. ${safe}</div>` }])
+    } finally {
+      setTyping(false)
+    }
+  }
+  function askAboutChart(prompt) {
+    setInput(prompt)
+    setTimeout(() => inputRef.current?.focus(), 30)
+  }
+  function openStudent(s) {
     openCanvas({
-      type: 'intervention',
-      groupName: 'At-Risk Intervention Group',
-      subject: 'Mathematics',
-      topic: 'Attendance + Foundations',
-      duration: '1 week',
-      session: 'After school',
-      students: studentNames,
+      type: 'student-profile',
+      studentId: s.id || s.ssmid,
+      grade: s.grade,
+      studentName: s.name,
+      from: 'at-risk-students',
     })
   }
 
-  const handleGenerateLessonPlan = () => {
-    openCanvas({
-      type: 'lesson-plan',
-      subject: 'Mathematics',
-      topic: 'Foundations Recap',
-      classId: `Class ${focusGrade}`,
-      students: studentNames,
-    })
-  }
+  // Chat chips: a mix of EWS analytical prompts.
+  const chips = [
+    'Why are these students at risk?',
+    'Which factor is driving the most cases?',
+    'Suggest an intervention plan',
+    scope === 'class' ? 'Draft parent-call scripts' : 'Which schools need help first?',
+    'Create reminder for follow-up',
+  ]
 
-  const handleParentAlerts = () => {
-    showToast?.(`Parent alerts queued for ${students.length} guardians.`, 'ok')
-  }
-
-  const handleParentAlert = (s) => {
-    const p = PARENT_CONTACTS[s.name]
-    showToast?.(`Parent alert prepared${p ? ` for ${p.parent}` : ''}.`, 'ok')
-  }
-
-  const handleCreateReminder = () => {
-    openNotificationsCanvas?.({
-      view: 'reminder',
-      reminderPrefill: {
-        title: 'Follow up on at-risk students',
-        message: `Review ${students.length} at-risk cases — call parents and schedule intervention.`,
-        priority: 'high',
-      },
-    })
+  // Stat tile click toggles a tier filter; clicking the same tile again clears.
+  function toggleTier(tier) {
+    setTierFilter(prev => prev === tier ? null : tier)
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Filter banner */}
-      {filterMode && (
-        <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 text-[11.5px] text-amber-900 flex-shrink-0">
-          {SCHOOL_LEVEL_FILTERS.has(filterMode)
-            ? 'School-level filter; using class-level sample as placeholder.'
-            : `Filtered: ${filterMode.replace(/_/g, ' ')} · ${students.length} of ${allStudents.length} students`}
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-bdr-light bg-white flex-shrink-0">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-danger-light flex items-center justify-center text-danger flex-shrink-0">
-            <AlertTriangle size={20} />
+    <div ref={containerRef} className="h-full flex flex-col" style={{ background: '#FFFFFF', fontFamily: FONT }}>
+      <div className="flex-1 overflow-y-auto p-5 min-h-0">
+        {/* Header */}
+        <div className="flex items-start gap-3 mb-1">
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <AlertTriangle size={18} color="#B91C1C" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[16px] font-bold text-txt-primary">At-Risk Students</div>
-            <div className="text-[12px] text-txt-secondary">{students.length} students flagged for dropout / learning risk</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Early Warning System · {scope[0].toUpperCase() + scope.slice(1)} level
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0E0E0E', lineHeight: '24px', marginTop: 2 }}>
+              At-Risk Students · {scopeLabel}
+            </h2>
+            <div style={{ fontSize: 12, color: '#7383A5', marginTop: 2 }}>
+              {atRisk.total.toLocaleString()} flagged of {totalStudents.toLocaleString()} students
+            </div>
           </div>
         </div>
 
-        {/* Risk-level summary chips */}
-        <div className="grid grid-cols-4 gap-2 mt-3">
-          <SummaryChip value={counts.Urgent} label="Urgent" color="#B71C1C" />
-          <SummaryChip value={counts.High}   label="High"   color="#C62828" />
-          <SummaryChip value={counts.Medium} label="Medium" color="#9A6500" />
-          <SummaryChip value={counts.Low}    label="Low"    color="#2E7D32" />
-        </div>
-      </div>
+        {/* Filter bar — role-aware. */}
+        {(role === 'principal' || role === 'crc' || role === 'beo' || role === 'deo' || role === 'state_secretary') && (
+          <div className="mt-3 flex flex-wrap items-center gap-2" style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #D5D8DF', background: '#FAFBFC' }}>
+            <FilterIcon size={13} color="#7383A5" />
+            <span style={{ fontSize: 10.5, color: '#828996', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Filter</span>
+            {/* Class / grade filter — principal + above (BEO etc see class filter too) */}
+            <select
+              value={grade}
+              onChange={e => setGrade(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+              style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT }}
+            >
+              <option value="all">All classes</option>
+              {availableGrades.map(g => <option key={g} value={g}>Class {g}</option>)}
+            </select>
+            {(role === 'crc' || role === 'beo' || role === 'deo' || role === 'state_secretary') && (
+              <select disabled style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#7383A5', fontFamily: FONT }}>
+                <option>All schools in {scope === 'cluster' ? 'cluster' : scope === 'block' ? 'block' : scope === 'state' ? 'state' : 'district'}</option>
+              </select>
+            )}
+            {tierFilter && (
+              <button onClick={() => setTierFilter(null)}
+                style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, background: '#FEE2E2', color: '#B91C1C', border: '1px solid #FECACA', cursor: 'pointer', fontFamily: FONT }}>
+                Clear: {tierFilter} ×
+              </button>
+            )}
+          </div>
+        )}
 
-      {/* Table-style list */}
-      <div className="flex-1 overflow-y-auto bg-surface-secondary px-3 py-3">
-        <div className="rounded-2xl border border-bdr bg-white overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-max w-full text-[12.5px] text-left">
-              <thead className="bg-surface-secondary">
-                <tr>
-                  {['Student','Parent','Phone','Region · Class','Risk','Attendance','Dropout Signal'].map(h => (
-                    <th key={h} className="px-3 py-2 text-[10px] font-semibold tracking-[0.4px] uppercase text-txt-secondary border-b border-bdr-light whitespace-nowrap">{h}</th>
-                  ))}
+        {/* Risk-tier stat tiles — clickable to filter the list */}
+        <div className="mt-4 flex gap-2">
+          <StatPill label="Urgent" value={atRisk.urgent} tone="urgent" active={tierFilter === 'urgent'} onClick={() => toggleTier('urgent')} />
+          <StatPill label="High"   value={atRisk.high}   tone="high"   active={tierFilter === 'high'}   onClick={() => toggleTier('high')} />
+          <StatPill label="Medium" value={atRisk.medium} tone="medium" active={tierFilter === 'medium'} onClick={() => toggleTier('medium')} />
+          <StatPill label="Low"    value={atRisk.low}    tone="low"    active={tierFilter === 'low'}    onClick={() => toggleTier('low')} />
+        </div>
+
+        {/* EWS-style breakdowns grid */}
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <ChartCard title="Gender split" askPrompt="Is the gender split unusual? What does it tell us?" onAsk={askAboutChart}>
+            <div className="flex items-center justify-around">
+              {breakdowns.gender.map(g => (
+                <DonutChart key={g.label} label={g.label} value={g.pct} color={g.label === 'Female' ? '#EF4444' : '#3B82F6'} />
+              ))}
+            </div>
+          </ChartCard>
+
+          <ChartCard title="Social category" askPrompt="Which social category is most over-represented?" onAsk={askAboutChart}>
+            <StackedCategoryBar rows={breakdowns.category} />
+          </ChartCard>
+
+          <ChartCard title="Predictor risk %" askPrompt="Which predictor is driving the most flags?" onAsk={askAboutChart}>
+            <PredictorBars rows={breakdowns.predictors} />
+          </ChartCard>
+
+          {/* Scope-appropriate roll-up card. Class-wise for school/teacher,
+              school-wise for cluster/block, district-wise for state. */}
+          {(scope === 'class' || scope === 'school') && breakdowns.classWise?.length > 0 && (
+            <ChartCard title="Class-wise distribution" askPrompt="Which class needs intervention first?" onAsk={askAboutChart}>
+              <PredictorBars rows={breakdowns.classWise.map(r => ({ label: r.label, pct: r.pct }))} />
+            </ChartCard>
+          )}
+          {(scope === 'cluster' || scope === 'block') && breakdowns.schoolWise?.length > 0 && (
+            <ChartCard title={`Top schools by at-risk count`} askPrompt="Which school is dragging the cohort? What support should they get?" onAsk={askAboutChart}>
+              <PredictorBars rows={breakdowns.schoolWise.map(r => ({ label: r.label, pct: r.pct }))} />
+            </ChartCard>
+          )}
+          {scope === 'state' && breakdowns.districtWise?.length > 0 && (
+            <ChartCard title="Top districts by at-risk count" askPrompt="Which district to escalate first?" onAsk={askAboutChart}>
+              <PredictorBars rows={breakdowns.districtWise.map(r => ({ label: r.label, pct: r.pct }))} />
+            </ChartCard>
+          )}
+        </div>
+
+        {/* Student list */}
+        {students.length > 0 && (
+          <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid #D5D8DF', background: '#FAFBFC' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Students {tierFilter ? `· ${tierFilter}` : ''} · showing {Math.min(students.length, 50)} of {students.length}
+              </div>
+            </div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#FAFBFC' }}>
+                  <th style={{ textAlign: 'left',  padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Name</th>
+                  <th style={{ textAlign: 'left',  padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Class</th>
+                  <th style={{ textAlign: 'right', padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Attendance</th>
+                  <th style={{ textAlign: 'left',  padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tier</th>
+                  <th style={{ padding: '8px 12px' }}></th>
                 </tr>
               </thead>
               <tbody>
-                {students.map((s, i) => {
-                  const r = riskLabel(s.risk, s.attendance)
-                  const p = PARENT_CONTACTS[s.name] || { parent: '—', phone: '—', region: `Class ${s.grade}` }
+                {students.slice(0, 50).map(s => {
+                  const tier =
+                    s.ewsFlag ? { label: 'URGENT', bg: '#FEE2E2', fg: '#B91C1C' } :
+                    s.risk === 'high' ? { label: 'HIGH', bg: '#FEF3C7', fg: '#92400E' } :
+                    s.risk === 'medium' ? { label: 'WATCH', bg: '#DBEAFE', fg: '#1E3A8A' } :
+                    { label: 'OK', bg: '#D1FAE5', fg: '#065F46' }
                   return (
-                    <tr key={i} className={i < students.length - 1 ? 'border-b border-bdr-light' : ''}>
-                      <td className="px-3 py-2.5 font-bold text-txt-primary whitespace-nowrap">{s.name}</td>
-                      <td className="px-3 py-2.5 text-txt-secondary whitespace-nowrap">{p.parent}</td>
-                      <td className="px-3 py-2.5 text-txt-primary font-medium whitespace-nowrap">{p.phone}</td>
-                      <td className="px-3 py-2.5 text-txt-secondary whitespace-nowrap">{p.region}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: r.bg, color: r.fg }}>{r.label}</span>
+                    <tr key={s.id || s.ssmid} style={{ borderTop: '1px solid #F1F5F9', cursor: 'pointer' }} onClick={() => openStudent(s)}>
+                      <td style={{ padding: '8px 12px', fontWeight: 600, color: '#0E0E0E' }}>
+                        {s.name}
+                        {s.ewsFlag && <span style={{ fontSize: 9.5, fontWeight: 700, marginLeft: 6, padding: '1px 6px', borderRadius: 999, background: '#FEF2F2', color: '#B91C1C' }}>EWS</span>}
                       </td>
-                      <td className="px-3 py-2.5 font-bold whitespace-nowrap" style={{ color: r.accent }}>{s.attendance}%</td>
-                      <td className="px-3 py-2.5 text-txt-secondary whitespace-nowrap">{dropoutSignal(s)}</td>
+                      <td style={{ padding: '8px 12px', color: '#0E0E0E' }}>Class {s.grade}{s.section ? `-${s.section}` : ''}</td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right', color: s.attendance < 70 ? '#B91C1C' : '#0E0E0E', fontWeight: s.attendance < 70 ? 700 : 500 }}>{s.attendance}%</td>
+                      <td style={{ padding: '8px 12px' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: tier.bg, color: tier.fg }}>
+                          {tier.label}
+                        </span>
+                      </td>
+                      <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                        <button onClick={e => { e.stopPropagation(); openStudent(s) }}
+                          style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 10px', borderRadius: 999, background: '#EEF2FF', color: '#3730A3', border: '1px solid #C7D2FE', cursor: 'pointer', fontFamily: FONT }}>
+                          Open profile ›
+                        </button>
+                      </td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* Actions */}
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <ActionCard label="Create intervention group" onClick={() => openCanvas({
+            type: 'intervention', groupName: 'At-Risk Intervention Group',
+            subject: 'Mathematics', topic: 'Attendance + Foundations',
+            duration: '1 week', session: 'After school',
+            students: students.slice(0, 12).map(s => s.name),
+          })} />
+          <ActionCard label="Generate lesson plan" onClick={() => openCanvas({
+            type: 'lesson-plan', subject: 'Mathematics', topic: 'Foundations Recap',
+            classId: `${scopeLabel}`, students: students.slice(0, 12).map(s => s.name),
+          })} />
+          <ActionCard label="Send parent alerts" onClick={() => showToast?.(`Parent alerts queued for ${students.length} guardians.`, 'ok')} variant="warn" />
+          <ActionCard label="Create reminder" onClick={() => openNotificationsCanvas?.({
+            view: 'reminder',
+            reminderPrefill: {
+              title: 'Follow up on at-risk students',
+              message: `Review ${students.length} at-risk cases in ${scopeLabel}.`,
+              priority: 'high',
+            },
+          })} />
         </div>
 
-        {/* Per-student quick actions */}
-        <div className="mt-3 grid gap-2">
-          {students.map((s, i) => {
-            const p = PARENT_CONTACTS[s.name]
-            return (
-              <div key={i} className="bg-white border border-bdr rounded-2xl p-3 flex items-start gap-3">
-                <div className="w-9 h-9 rounded-full bg-danger-light text-danger flex items-center justify-center text-[12px] font-bold flex-shrink-0">
-                  {s.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-bold text-txt-primary">{s.name}</div>
-                  <div className="text-[11.5px] text-txt-secondary leading-snug">{s.reason} · {s.attendance}% attendance · {s.days} day(s) absent</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <ActionChip onClick={() => handleParentAlert(s)} variant="warn"><MessageSquare size={11} /> Parent alert</ActionChip>
-                    {p?.phone && <ActionChip variant="primary" as="a" href={`tel:${p.phone.replace(/\s+/g,'')}`}><Phone size={11} /> Call parent</ActionChip>}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* AI Insight */}
-        <div className="mt-3 px-3 py-3 rounded-2xl border border-[#00BA34] bg-[#D4F5DC]">
-          <div className="text-[10px] font-bold tracking-[0.4px] uppercase text-[#007B22] mb-1">AI Insight</div>
-          <div className="text-[12.5px] leading-snug text-[#007B22]">
-            Start with the highest-risk row. Calling the parent within 24 hours typically prevents the next absence cycle.
-            Pair attendance follow-up with a one-week intervention group on the weakest topic.
-          </div>
+        <div className="mt-6" style={{ fontSize: 11, color: '#828996', lineHeight: '16px' }}>
+          Source · EWS predictor model on Smart Attendance + Xamta + UDISE+ + DigiVritti master tables.
+          Risk tiers: Urgent = composite EWS flag · High / Medium / Low from attendance and LO scores.
         </div>
       </div>
 
-      {/* Bottom CTAs (mirrors the Ask AI after-school result card) */}
-      <div className="px-3 py-3 border-t border-bdr-light bg-white flex-shrink-0">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <Cta onClick={handleCreateIntervention}  icon={Users}        label="Create intervention group" />
-          <Cta onClick={handleGenerateLessonPlan}  icon={BookOpen}     label="Generate lesson plan" />
-          <Cta onClick={handleParentAlerts}        icon={MessageSquare} label="Send parent alerts" variant="warn" />
-          <Cta onClick={handleCreateReminder}      icon={Bell}         label="Create reminder" />
-        </div>
-        <button
-          onClick={closeCanvas}
-          className="mt-2 w-full h-10 rounded-2xl border-[1.5px] border-bdr text-txt-secondary text-[12.5px] font-bold"
-        >Close</button>
-      </div>
+      <DragHandle onPointerDown={onPointerDown} />
+      <ChatPanel
+        chatHeight={chatHeight}
+        chips={chips}
+        messages={messages}
+        typing={typing}
+        onSend={send}
+        input={input}
+        setInput={setInput}
+        inputRef={inputRef}
+        placeholder={`Ask about at-risk students in ${scopeLabel}…`}
+        onOpenStudent={({ ssmid, name }) => openCanvas({
+          type: 'student-profile',
+          studentId: ssmid, studentName: name,
+          from: 'at-risk-students',
+        })}
+      />
     </div>
   )
 }
 
-function SummaryChip({ value, label, color }) {
-  return (
-    <div className="bg-surface-secondary rounded-xl px-2 py-1.5 text-center">
-      <div className="text-[15px] font-bold leading-tight" style={{ color }}>{value}</div>
-      <div className="text-[9px] uppercase tracking-[0.3px] text-txt-tertiary">{label}</div>
-    </div>
-  )
-}
-
-function ActionChip({ onClick, children, variant = 'primary', as = 'button', href }) {
-  const tone = variant === 'warn'
-    ? 'border-warn text-[#9A6500] hover:bg-warn-light'
-    : 'border-primary text-primary hover:bg-primary-light'
-  const cls = `inline-flex items-center gap-1 px-2.5 py-1 rounded-full border-[1.5px] bg-white text-[11px] font-bold ${tone}`
-  if (as === 'a') {
-    return <a href={href} className={cls}>{children}</a>
+function ActionCard({ label, onClick, variant }) {
+  const tones = {
+    default: { bd: '#386AF6', fg: '#386AF6', bg: '#FFFFFF' },
+    warn:    { bd: '#F59E0B', fg: '#92400E', bg: '#FFFFFF' },
   }
-  return <button onClick={onClick} className={cls}>{children}</button>
-}
-
-function Cta({ onClick, icon: Icon, label, variant = 'primary' }) {
-  const tone = variant === 'warn'
-    ? 'border-warn text-[#9A6500] hover:bg-warn-light'
-    : 'border-primary text-primary hover:bg-primary-light'
+  const t = tones[variant] || tones.default
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border-[1.5px] bg-white text-[12px] font-bold text-left ${tone}`}
+      className="active:scale-95 transition-all"
+      style={{
+        padding: '10px 12px', borderRadius: 12,
+        border: `1.5px solid ${t.bd}`, background: t.bg, color: t.fg,
+        fontSize: 11.5, fontWeight: 700, cursor: 'pointer', fontFamily: FONT,
+        textAlign: 'left', lineHeight: '15px',
+      }}
     >
-      <Icon size={14} className="flex-shrink-0" />
-      <span className="leading-snug">{label}</span>
+      {label}
     </button>
   )
 }

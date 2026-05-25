@@ -23,6 +23,7 @@ import {
 } from '../utils/dashboardCharts'
 import { ROLE_BOTS, ROLE_SUGGESTIONS } from '../roles/roleConfig'
 import { AGGREGATES as REGISTRY_AGG, aggregatesFor } from '../data/registries'
+import { getAtRiskCohort } from '../data/atRiskData'
 import { dispatchDigiVritti, isDigiVrittiTrigger } from '../utils/digivrittiChat'
 import { groupByRecency, detectTool, TOOL_TITLES } from '../utils/chatHistory'
 import { routeIntentSync, routeIntent } from '../nlp/globalIntentRouter'
@@ -1329,8 +1330,9 @@ function greetingReply(text, _botName, role, profile) {
   const name = profile?.name?.split(' ')[0] || 'there'
   const alerts = []
   if (role === 'teacher' || role === 'principal') {
-    const risk = AT_RISK_STUDENTS?.filter(s => s.risk === 'high')?.length || 0
-    if (risk > 0) alerts.push(`⚠️ ${risk} high-risk students need attention`)
+    // Use the same cohort builder as the canvas + the At-Risk home tile.
+    const risk = getAtRiskCohort(role, profile, {}).atRisk.total
+    if (risk > 0) alerts.push(`⚠️ ${risk} students flagged at risk`)
     const pending = NAMO_LAXMI_APPS?.filter(a => a.status === 'pending')?.length || 0
     if (pending > 0) alerts.push(`📋 ${pending} Namo Laxmi applications pending review`)
   }
@@ -1789,7 +1791,11 @@ function MessageBubble({ msg, onChipClick, onAction, onCardClick }) {
 
 // Personalized stats per role
 function getRoleAlerts(role, profile) {
-  const risk = AT_RISK_STUDENTS?.filter(s => s.risk === 'high')?.length || 0
+  // Single source of truth for the At-Risk count. Same function the
+  // AtRiskStudentsCanvas uses — so the home tile number always matches the
+  // canvas total (was 3 vs 18 mismatch before).
+  const cohort = getAtRiskCohort(role, profile, {})
+  const risk = cohort.atRisk.total
   const pending = NAMO_LAXMI_APPS?.filter(a => a.status === 'pending')?.length || 0
   if (role === 'teacher') {
     // Pin every teacher-scope drilldown to the teacher's primary class so the
@@ -2991,7 +2997,9 @@ export default function SuperHomePage() {
 
     // ── Daily brief / today / what to do ────────────────────────────────
     if (has('daily brief','what should i do','today','my day','morning brief','summary')) {
-      const risk = AT_RISK_STUDENTS?.filter(s => s.risk === 'high')?.length || 0
+      // Same cohort-builder the canvas + the At-Risk home tile use, so the
+      // brief always matches the tile counts.
+      const risk = getAtRiskCohort(role, userProfile, {}).atRisk.total
       const pending = NAMO_LAXMI_APPS?.filter(a => a.status === 'pending')?.length || 0
       const briefs = {
         teacher: `📋 **Your Daily Brief — ${TODAY}**\n\n📅 Attendance not yet marked for today\n⚠️ ${risk} high-risk students need attention\n📋 ${pending} Namo Laxmi applications pending\n📊 Class 8 average: ${PERF_DATA[8]?.math || 74}% (Math)\n\nWhat would you like to tackle first?`,
@@ -3036,8 +3044,9 @@ export default function SuperHomePage() {
         )
         return
       }
-      const risk = AT_RISK_STUDENTS?.filter(s => s.risk === 'high')?.length || 0
-      addBot(`${ack} I found some items that need attention:\n\n🔴 **${risk} high-risk students** — chronic absence or low scores\n⚠️ **3 anomalies detected** — Daskroi below 75% threshold\n📋 **2 pending** Namo Laxmi applications need review\n\nWhich would you like to look at first?`,
+      // Cohort-builder so the chat reply matches the home At-Risk tile.
+      const risk = getAtRiskCohort(role, userProfile, {}).atRisk.total
+      addBot(`${ack} I found some items that need attention:\n\n🔴 **${risk} students at risk** — chronic absence or low scores\n⚠️ **3 anomalies detected** — Daskroi below 75% threshold\n📋 **2 pending** Namo Laxmi applications need review\n\nWhich would you like to look at first?`,
         ['At-risk students','Namo Laxmi','School dashboard','War room alerts'],
         { progress: ['Scanning alerts...', 'Checking anomalies...'] })
       return
