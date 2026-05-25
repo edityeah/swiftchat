@@ -26,10 +26,15 @@
 //   reasonBuilder:    ({ value, benchmark, delta, meta }) => string
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ALL_DOC_ROLES = ['teacher', 'principal', 'crc', 'beo', 'state_secretary']
-const FROM_PRINCIPAL = ['principal', 'crc', 'beo', 'state_secretary']
-const BLOCK_AND_STATE = ['beo', 'state_secretary']
-const PRINCIPAL_BLOCK_STATE = ['principal', 'beo', 'state_secretary']
+// Doc framework has 6 hierarchy columns: Teacher / School-Principal / Cluster
+// (CRC) / Block (BEO) / District (DEO) / State (State Secretary). Every list
+// below now includes `deo` because the doc's District column has a value for
+// every row — DEO is a full administrative tier with the same KPI surface as
+// State Secretary, just scoped to one district.
+const ALL_DOC_ROLES = ['teacher', 'principal', 'crc', 'beo', 'deo', 'state_secretary']
+const FROM_PRINCIPAL = ['principal', 'crc', 'beo', 'deo', 'state_secretary']
+const BLOCK_AND_STATE = ['beo', 'deo', 'state_secretary']            // doc rows 26-28
+const PRINCIPAL_BLOCK_STATE = ['principal', 'beo', 'deo', 'state_secretary']  // doc row 29
 // All KPIs in the catalog now map 1:1 to the Gujarat VSK KPI Framework PDF.
 // Each row's `roles` array lists only the columns that have a value (not "—")
 // in the doc — that's why teachers see 13, principals 26, cluster 25, block

@@ -33,7 +33,9 @@ check('beo = 29',             getCatalogForRole('beo').length === 29)
 check('state_secretary = 29', getCatalogForRole('state_secretary').length === 29)
 check('parent = 5',           getCatalogForRole('parent').length === 5)
 check('pfms = 5',             getCatalogForRole('pfms').length === 5)
-check('deo = 0',              getCatalogForRole('deo').length === 0)
+// DEO is a full administrative tier in the doc (District column has values
+// on every row). Same surface as State Secretary, scoped to one district.
+check('deo = 29',             getCatalogForRole('deo').length === 29)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

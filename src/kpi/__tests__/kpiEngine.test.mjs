@@ -58,9 +58,10 @@ const parentHero = pickHero('parent', parentProfile)
 check('parent has a hero', parentHero != null)
 check('parent KPI count = 5', getCatalogForRole('parent').length === 5)
 
-console.log('deo: 0 KPIs, returns empty arrays')
-check('deo prioritise empty', prioritise('deo', {}, 4).length === 0)
-check('deo overall null', computeOverallScore('deo', {}).score === null)
+console.log('deo: 29 KPIs (full district tier per doc framework)')
+check('deo KPI count = 29',  getCatalogForRole('deo').length === 29)
+check('deo prioritise > 0',  prioritise('deo', {}, 4).length > 0)
+check('deo overall is num',  typeof computeOverallScore('deo', {}).score === 'number')
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
