@@ -8,6 +8,7 @@ import {
   _assessHash, _assessRollup,
 } from '../../data/assessmentData'
 import { getDistrictHierarchy, getBlockHierarchy, schoolsForCluster } from '../../data/attendanceHierarchy'
+import { DISTRICTS, titleCase } from '../../data/registries'
 import { openStudentReportCard, openBulkStudentReportCards } from '../shared/studentReportCard'
 import { openScopeAttendanceReport, openStudentAttendanceReport } from '../shared/attendanceReport'
 import { openParticipationPdfForScope } from '../shared/participationReport'
@@ -409,29 +410,37 @@ export default function AssessmentDashboardCanvas({ context }) {
   // that drill the entire canvas — table, headline, downloads — to that
   // sub-scope. When a filter is set we "promote" the effective scope as
   // though the user were a BEO / CRC / Principal viewing that entity.
-  const [hierFilters, setHierFilters] = useState({ block: '', cluster: '', school: '' })
+  const [hierFilters, setHierFilters] = useState({ district: '', block: '', cluster: '', school: '' })
 
-  // Cached hierarchy used to populate the dropdowns. Range doesn't matter
-  // for assessment — we only use it for the entity tree.
-  const districtHier = useMemo(
-    () => (scope === 'district') ? getDistrictHierarchy(profile?.district || 'Ahmedabad', 'today') : null,
-    [scope, profile?.district]
-  )
+  // Cached hierarchy used to populate the dropdowns. State scope uses the
+  // filter.district selection to build a fresh district hierarchy. DEO uses
+  // its OWN district. BEO uses its own block. CRC's schools come straight
+  // from schoolsForCluster.
+  const districtHier = useMemo(() => {
+    if (scope === 'district') return getDistrictHierarchy(profile?.district || 'Ahmedabad', 'today')
+    if (scope === 'state' && hierFilters.district) return getDistrictHierarchy(hierFilters.district, 'today')
+    return null
+  }, [scope, profile?.district, hierFilters.district])
   const blockHier = useMemo(
     () => (scope === 'block') ? getBlockHierarchy(profile?.block || 'Mehsana', 'today') : null,
     [scope, profile?.block]
   )
 
   // Dropdown option sources — cascading based on parent selection.
-  const allBlocks = scope === 'district' ? (districtHier?.blocks || []) : []
-  const allClusters = (scope === 'district' && hierFilters.block)
-    ? (districtHier?.blocks.find(b => b.name === hierFilters.block)?.clusters || [])
-    : (scope === 'block' ? (blockHier?.clusters || []) : [])
+  const allDistricts = scope === 'state' ? DISTRICTS.map(d => ({ name: titleCase(d.name) })) : []
+  const allBlocks = (scope === 'district' || (scope === 'state' && hierFilters.district))
+    ? (districtHier?.blocks || []) : []
+  const allClusters = (() => {
+    if ((scope === 'district' || scope === 'state') && hierFilters.block) {
+      return districtHier?.blocks.find(b => b.name === hierFilters.block)?.clusters || []
+    }
+    return scope === 'block' ? (blockHier?.clusters || []) : []
+  })()
   // Schools list — comes from the hierarchy when a parent filter is active,
   // OR straight from the CRC's own cluster (no parent filter needed since
   // they're already scoped to their cluster).
   const allSchools = useMemo(() => {
-    if (scope === 'district' && hierFilters.cluster) {
+    if ((scope === 'district' || scope === 'state') && hierFilters.cluster) {
       return districtHier?.blocks.flatMap(b => b.clusters).find(c => c.name === hierFilters.cluster)?.schools || []
     }
     if (scope === 'block' && hierFilters.cluster) {
@@ -457,12 +466,14 @@ export default function AssessmentDashboardCanvas({ context }) {
   // - block filter (DEO only) → effective 'block' (BEO view)
   // - no filter → keep the user's role-driven scope
   const effective = useMemo(() => {
+    const overrideDistrict = hierFilters.district || profile?.district
     if (hierFilters.school) {
       const school = allSchools.find(s => String(s.schoolid) === String(hierFilters.school))
       return {
         scope: 'school',
         profile: {
           ...profile,
+          district: overrideDistrict,
           school: school?.name || 'Selected school',
           schoolId: school?.schoolid,
           cluster: hierFilters.cluster || profile?.cluster,
@@ -471,13 +482,16 @@ export default function AssessmentDashboardCanvas({ context }) {
       }
     }
     if (hierFilters.cluster) {
-      return { scope: 'cluster', profile: { ...profile, cluster: hierFilters.cluster, block: hierFilters.block || profile?.block } }
+      return { scope: 'cluster', profile: { ...profile, district: overrideDistrict, cluster: hierFilters.cluster, block: hierFilters.block || profile?.block } }
     }
-    if (hierFilters.block && scope === 'district') {
-      return { scope: 'block', profile: { ...profile, block: hierFilters.block } }
+    if (hierFilters.block) {
+      return { scope: 'block', profile: { ...profile, district: overrideDistrict, block: hierFilters.block } }
+    }
+    if (hierFilters.district && scope === 'state') {
+      return { scope: 'district', profile: { ...profile, district: hierFilters.district } }
     }
     return { scope, profile }
-  }, [hierFilters.block, hierFilters.cluster, hierFilters.school, scope, profile, allSchools])
+  }, [hierFilters.district, hierFilters.block, hierFilters.cluster, hierFilters.school, scope, profile, allSchools])
 
   // CRC's cluster view: by default the user has no school filter, but we
   // still want the table to list every school in their cluster (real +
@@ -503,7 +517,7 @@ export default function AssessmentDashboardCanvas({ context }) {
   // dropdown shows 4 schools (real + synth-padded), the table also lists 4
   // schools, not just the 1-2 real ones from the registry sample.
   const scopeTable = useMemo(() => {
-    if (!hierFilters.block && !hierFilters.cluster && !hierFilters.school && !crcImplicitCluster) return rawScopeTable
+    if (!hierFilters.district && !hierFilters.block && !hierFilters.cluster && !hierFilters.school && !crcImplicitCluster) return rawScopeTable
     // CRC default (no explicit filter) → behave as if cluster filter was set
     // to their own cluster, so the table shows every school in the cluster.
     const activeCluster = hierFilters.cluster || crcImplicitCluster
@@ -511,19 +525,13 @@ export default function AssessmentDashboardCanvas({ context }) {
       const r = _assessRollup(_assessHash(`${key}|${subject}|${grade}`), total)
       return { total, submitted: r.submitted, pct: r.pct, present: r.present, absent: r.absent }
     }
-    // School filter — single-row table for the picked school.
+    // School filter — drop straight through to rawScopeTable, which (since
+    // effective.scope === 'school') already returns STUDENT rows. The user
+    // expects the same student list a Principal would see, so they can
+    // download GCERT report cards from there. Don't replace with a 1-row
+    // school summary.
     if (hierFilters.school) {
-      const school = allSchools.find(s => String(s.schoolid) === String(hierFilters.school))
-      if (school) {
-        const per = Math.max(15, Math.round((school.metrics?.total || 100) / 8))
-        const r = rollupFor(`${school.schoolid}|school`, per)
-        return {
-          kind: 'school', entityNoun: 'School',
-          scope: 'school', scopeLabel: school.name,
-          rows: [{ name: school.name, code: String(school.schoolid), ...r }],
-          totals: { ...r },
-        }
-      }
+      return rawScopeTable
     }
     // Cluster filter (explicit OR CRC default) — one row per school in
     // the cluster, using the synth-padded list so dropdown == table.
@@ -541,6 +549,21 @@ export default function AssessmentDashboardCanvas({ context }) {
       totals.pct = totals.total ? +((totals.submitted / totals.total) * 100).toFixed(1) : 0
       return { kind: 'schools', entityNoun: 'School', scope: 'cluster', scopeLabel: activeCluster, rows, totals }
     }
+    // District filter (State role only) — one row per block in district
+    if (hierFilters.district && !hierFilters.block && allBlocks.length) {
+      const blocks = allBlocks
+      const rows = blocks.map(b => {
+        const per = b.clusters.reduce((acc, c) => acc + c.schools.reduce((a, s) => a + Math.max(15, Math.round((s.metrics?.total || 100) / 8)), 0), 0)
+        const r = rollupFor(`${b.name}|block`, per)
+        return { name: b.name, code: `${b.clusters.length} clusters`, schoolCount: b.clusters.reduce((a, c) => a + c.schools.length, 0), ...r }
+      }).sort((a, b) => b.pct - a.pct)
+      const totals = rows.reduce((acc, r) => ({
+        total: acc.total + r.total, submitted: acc.submitted + r.submitted,
+        present: acc.present + r.present, absent: acc.absent + r.absent,
+      }), { total: 0, submitted: 0, present: 0, absent: 0 })
+      totals.pct = totals.total ? +((totals.submitted / totals.total) * 100).toFixed(1) : 0
+      return { kind: 'blocks', entityNoun: 'Block', scope: 'district', scopeLabel: hierFilters.district, rows, totals }
+    }
     // Block filter — one row per cluster in the block (uses hierarchy clusters)
     if (hierFilters.block) {
       const clusters = allClusters
@@ -557,7 +580,7 @@ export default function AssessmentDashboardCanvas({ context }) {
       return { kind: 'clusters', entityNoun: 'Cluster', scope: 'block', scopeLabel: hierFilters.block, rows, totals }
     }
     return rawScopeTable
-  }, [rawScopeTable, hierFilters.block, hierFilters.cluster, hierFilters.school, crcImplicitCluster, allBlocks, allClusters, allSchools, subject, grade])
+  }, [rawScopeTable, hierFilters.district, hierFilters.block, hierFilters.cluster, hierFilters.school, crcImplicitCluster, allBlocks, allClusters, allSchools, subject, grade])
 
   // Headline = class data (teacher) / school data (others). When a sub-scope
   // filter is active for DEO/BEO on the participation KPI, recompute the
@@ -761,12 +784,10 @@ export default function AssessmentDashboardCanvas({ context }) {
           <div className="flex-1 min-w-0">
             <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
               A2 · Assessment & Learning Outcomes · {
-                // Use the actual jurisdiction in the breadcrumb, AND honour
-                // any active hierarchical filter so the breadcrumb reflects
-                // where the user has drilled to.
                 hierFilters.school ? (allSchools.find(s => String(s.schoolid) === String(hierFilters.school))?.name || 'Selected school') :
                 hierFilters.cluster ? `${hierFilters.cluster} cluster` :
-                hierFilters.block ? `${hierFilters.block} block · ${profile?.district || 'District'}` :
+                hierFilters.block ? `${hierFilters.block} block · ${hierFilters.district || profile?.district || 'District'}` :
+                hierFilters.district ? `${hierFilters.district} district` :
                 scope === 'class'    ? `Class ${grade}` :
                 scope === 'school'   ? (profile?.school || 'School level') :
                 scope === 'cluster'  ? `${profile?.cluster || 'Cluster'} cluster` :
@@ -822,27 +843,37 @@ export default function AssessmentDashboardCanvas({ context }) {
             Same UX as the Attendance Dashboard — when the user picks an
             entity, the headline, table AND the download report drill to
             that selection. */}
-        {(scope === 'district' || scope === 'block' || scope === 'cluster') && (
+        {(scope === 'state' || scope === 'district' || scope === 'block' || scope === 'cluster') && (
           <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #D5D8DF', background: '#FAFBFC', fontFamily: FONT }}>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: '#828996', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Filter</span>
-            {scope === 'district' && (
+            {scope === 'state' && (
               <select
-                value={hierFilters.block}
-                onChange={e => setHierFilters({ block: e.target.value, cluster: '', school: '' })}
+                value={hierFilters.district}
+                onChange={e => setHierFilters({ district: e.target.value, block: '', cluster: '', school: '' })}
                 style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT }}
               >
-                <option value="">All blocks ({allBlocks.length})</option>
+                <option value="">All districts ({allDistricts.length})</option>
+                {allDistricts.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
+              </select>
+            )}
+            {(scope === 'district' || scope === 'state') && (
+              <select
+                value={hierFilters.block}
+                onChange={e => setHierFilters({ ...hierFilters, block: e.target.value, cluster: '', school: '' })}
+                disabled={scope === 'state' && !hierFilters.district}
+                style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: (scope === 'state' && !hierFilters.district) ? 0.5 : 1 }}
+              >
+                <option value="">All blocks{allBlocks.length ? ` (${allBlocks.length})` : ''}</option>
                 {allBlocks.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
               </select>
             )}
-            {/* Cluster dropdown — hidden for CRC since they're locked to ONE cluster.
-                For DEO it's disabled until a block is picked; for BEO it's always enabled. */}
+            {/* Cluster dropdown — hidden for CRC since they're locked to ONE cluster. */}
             {scope !== 'cluster' && (
               <select
                 value={hierFilters.cluster}
                 onChange={e => setHierFilters({ ...hierFilters, cluster: e.target.value, school: '' })}
-                disabled={scope === 'district' && !hierFilters.block}
-                style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: (scope === 'district' && !hierFilters.block) ? 0.5 : 1 }}
+                disabled={(scope === 'district' || scope === 'state') && !hierFilters.block}
+                style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: ((scope === 'district' || scope === 'state') && !hierFilters.block) ? 0.5 : 1 }}
               >
                 <option value="">All clusters{allClusters.length ? ` (${allClusters.length})` : ''}</option>
                 {allClusters.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
@@ -857,9 +888,9 @@ export default function AssessmentDashboardCanvas({ context }) {
               <option value="">All schools{allSchools.length ? ` (${allSchools.length})` : ''}</option>
               {allSchools.map(s => <option key={s.schoolid} value={s.schoolid}>{s.name}</option>)}
             </select>
-            {(hierFilters.block || hierFilters.cluster || hierFilters.school) && (
+            {(hierFilters.district || hierFilters.block || hierFilters.cluster || hierFilters.school) && (
               <button
-                onClick={() => setHierFilters({ block: '', cluster: '', school: '' })}
+                onClick={() => setHierFilters({ district: '', block: '', cluster: '', school: '' })}
                 style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, background: '#FEE2E2', color: '#B91C1C', border: '1px solid #FECACA', cursor: 'pointer', fontFamily: FONT }}
               >
                 Clear filters ×

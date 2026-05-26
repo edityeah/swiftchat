@@ -716,7 +716,10 @@ function StateScopeView({ districtRows, top5, bottom5, totals, byMgmt, onAsk }) 
 // children. Filters at the top let the user jump straight to a level.
 // `filters` is { block, cluster, school } — the parent canvas owns state so
 // the download button knows the active filter.
-function HierarchicalAttendanceView({ scope, hierarchy, filters, setFilters, onAsk }) {
+function HierarchicalAttendanceView({ scope, hierarchy, filters, setFilters, onAsk, allDistricts = [] }) {
+  // State + district filter behaves identically to DEO's district view from
+  // the table/expand POV — the only difference is the extra district picker.
+  const viewScope = (scope === 'state' && filters.district) ? 'district' : scope
   const [expanded, setExpanded] = useState(() => new Set())
   function toggleKey(key) {
     setExpanded(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
@@ -731,29 +734,29 @@ function HierarchicalAttendanceView({ scope, hierarchy, filters, setFilters, onA
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.block, filters.cluster])
 
-  const blocks = scope === 'district'
+  const blocks = viewScope === 'district'
     ? (filters.block ? hierarchy.blocks.filter(b => b.name === filters.block) : hierarchy.blocks)
     : null
-  const clusters = scope === 'block'
+  const clusters = viewScope === 'block'
     ? (filters.cluster ? hierarchy.clusters.filter(c => c.name === filters.cluster) : hierarchy.clusters)
     : null
   // CRC scope: flat list of schools inside their cluster.
-  const clusterSchools = scope === 'cluster'
+  const clusterSchools = viewScope === 'cluster'
     ? (filters.school ? hierarchy.schools.filter(s => String(s.schoolid) === String(filters.school)) : hierarchy.schools)
     : null
   // For Block selectors — DEO only — pull all blocks; BEO doesn't need it.
-  const allBlocks   = scope === 'district' ? hierarchy.blocks : []
-  const allClusters = (scope === 'district' && filters.block)
+  const allBlocks   = viewScope === 'district' ? hierarchy.blocks : []
+  const allClusters = (viewScope === 'district' && filters.block)
     ? (hierarchy.blocks.find(b => b.name === filters.block)?.clusters || [])
-    : (scope === 'block' ? hierarchy.clusters : [])
+    : (viewScope === 'block' ? hierarchy.clusters : [])
   const allSchools  = (() => {
-    if (scope === 'district' && filters.cluster) {
+    if (viewScope === 'district' && filters.cluster) {
       return hierarchy.blocks.flatMap(b => b.clusters).find(c => c.name === filters.cluster)?.schools || []
     }
-    if (scope === 'block' && filters.cluster) {
+    if (viewScope === 'block' && filters.cluster) {
       return hierarchy.clusters.find(c => c.name === filters.cluster)?.schools || []
     }
-    if (scope === 'cluster') {
+    if (viewScope === 'cluster') {
       return hierarchy.schools || []
     }
     return []
@@ -796,20 +799,32 @@ function HierarchicalAttendanceView({ scope, hierarchy, filters, setFilters, onA
       {/* Filter row */}
       <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #D5D8DF', background: '#FAFBFC', fontFamily: FONT }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, color: '#828996', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Filter</span>
-        {scope === 'district' && (
-          <select value={filters.block} onChange={e => setFilters({ block: e.target.value, cluster: '', school: '' })}
+        {scope === 'state' && (
+          <select
+            value={filters.district || ''}
+            onChange={e => setFilters({ district: e.target.value, block: '', cluster: '', school: '' })}
             style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT }}>
-            <option value="">All blocks ({allBlocks.length})</option>
+            <option value="">All districts ({allDistricts.length})</option>
+            {allDistricts.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
+          </select>
+        )}
+        {(scope === 'district' || scope === 'state') && (
+          <select
+            value={filters.block}
+            onChange={e => setFilters({ ...filters, block: e.target.value, cluster: '', school: '' })}
+            disabled={scope === 'state' && !filters.district}
+            style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: (scope === 'state' && !filters.district) ? 0.5 : 1 }}>
+            <option value="">All blocks{allBlocks.length ? ` (${allBlocks.length})` : ''}</option>
             {allBlocks.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
           </select>
         )}
-        {/* Cluster dropdown — DEO/BEO only; CRC is already locked to ONE cluster. */}
+        {/* Cluster dropdown — hidden for CRC since they're locked to ONE cluster. */}
         {scope !== 'cluster' && (
           <select
             value={filters.cluster}
             onChange={e => setFilters({ ...filters, cluster: e.target.value, school: '' })}
-            disabled={scope === 'district' && !filters.block}
-            style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: (scope === 'district' && !filters.block) ? 0.5 : 1 }}>
+            disabled={(scope === 'district' || scope === 'state') && !filters.block}
+            style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: ((scope === 'district' || scope === 'state') && !filters.block) ? 0.5 : 1 }}>
             <option value="">All clusters{allClusters.length ? ` (${allClusters.length})` : ''}</option>
             {allClusters.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
           </select>
@@ -822,8 +837,8 @@ function HierarchicalAttendanceView({ scope, hierarchy, filters, setFilters, onA
           <option value="">All schools{allSchools.length ? ` (${allSchools.length})` : ''}</option>
           {allSchools.map(s => <option key={s.schoolid} value={s.schoolid}>{s.name}</option>)}
         </select>
-        {(filters.block || filters.cluster || filters.school) && (
-          <button onClick={() => setFilters({ block: '', cluster: '', school: '' })}
+        {(filters.district || filters.block || filters.cluster || filters.school) && (
+          <button onClick={() => setFilters({ district: '', block: '', cluster: '', school: '' })}
             style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, background: '#FEE2E2', color: '#B91C1C', border: '1px solid #FECACA', cursor: 'pointer', fontFamily: FONT }}>
             Clear filters ×
           </button>
@@ -833,8 +848,8 @@ function HierarchicalAttendanceView({ scope, hierarchy, filters, setFilters, onA
       {/* Headline rollup totals */}
       <div className="mt-4 grid grid-cols-3 gap-2">
         <StatCard
-          label={scope === 'district' ? 'Blocks' : scope === 'block' ? 'Clusters' : 'Schools'}
-          value={scope === 'district' ? hierarchy.blocks.length : scope === 'block' ? hierarchy.clusters.length : (hierarchy.schools?.length || 0)}
+          label={viewScope === 'district' ? 'Blocks' : viewScope === 'block' ? 'Clusters' : 'Schools'}
+          value={viewScope === 'district' ? hierarchy.blocks.length : viewScope === 'block' ? hierarchy.clusters.length : (hierarchy.schools?.length || 0)}
           accent="#0EA5E9"
         />
         <StatCard label="Students enrolled" value={hierarchy.totals.total.toLocaleString()} accent="#3B82F6" />
@@ -844,10 +859,10 @@ function HierarchicalAttendanceView({ scope, hierarchy, filters, setFilters, onA
       {/* Hierarchy list */}
       <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'auto hidden' }}>
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #D5D8DF', background: '#FAFBFC', fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-          {scope === 'district' ? 'District → Block → Cluster → School' : scope === 'block' ? 'Block → Cluster → School' : 'Cluster → School'} · {scope === 'cluster' ? 'flat list' : 'click rows to expand'}
+          {viewScope === 'district' ? 'District → Block → Cluster → School' : viewScope === 'block' ? 'Block → Cluster → School' : 'Cluster → School'} · {viewScope === 'cluster' ? 'flat list' : 'click rows to expand'}
         </div>
 
-        {(scope === 'district' ? blocks : null)?.map(block => {
+        {(viewScope === 'district' ? blocks : null)?.map(block => {
           const bk = 'b:' + block.name
           const blockOpen = expanded.has(bk)
           return (
@@ -871,7 +886,7 @@ function HierarchicalAttendanceView({ scope, hierarchy, filters, setFilters, onA
           )
         })}
 
-        {(scope === 'block' ? clusters : null)?.map(cluster => {
+        {(viewScope === 'block' ? clusters : null)?.map(cluster => {
           const ck = 'c:' + cluster.name
           const clusterOpen = expanded.has(ck)
           return (
@@ -884,7 +899,7 @@ function HierarchicalAttendanceView({ scope, hierarchy, filters, setFilters, onA
           )
         })}
 
-        {(scope === 'cluster' ? clusterSchools : null)?.map(school => (
+        {(viewScope === 'cluster' ? clusterSchools : null)?.map(school => (
           <Row key={'s:' + school.schoolid} name={school.name} metrics={school.metrics} depth={0} />
         ))}
       </div>
@@ -990,24 +1005,26 @@ export default function AttendanceDashboardCanvas({ context }) {
   // Today vs Last-30-days. The toggle pill is in every scope view.
   const [range, setRange] = useState('today')
 
-  // Hierarchical filter state for DEO (district) + BEO (block). Drives both
-  // the drilldown view and the download report button — so when the user
-  // picks a block / cluster / school, the PDF is at that exact level.
-  const [hierFilters, setHierFilters] = useState({ block: '', cluster: '', school: '' })
+  // Hierarchical filter state for state/DEO/BEO/CRC. Drives the drilldown
+  // view AND the download — so when the user picks a district / block /
+  // cluster / school, the PDF is at that exact level.
+  const [hierFilters, setHierFilters] = useState({ district: '', block: '', cluster: '', school: '' })
 
-  // Reset filters whenever the scope changes (avoid stale block selection
-  // leaking from DEO into BEO etc).
+  // Reset filters whenever the scope changes (avoid stale selections
+  // leaking from one role into another).
   useEffect(() => {
-    setHierFilters({ block: '', cluster: '', school: '' })
+    setHierFilters({ district: '', block: '', cluster: '', school: '' })
   }, [scope])
 
   // Build the hierarchical tree once per (scope, jurisdiction, range).
   // For DEO: blocks → clusters → schools rooted at the district.
+  // For State + district filter: same shape, rooted at the picked district.
   // For BEO: clusters → schools rooted at the block.
   const districtHierarchy = useMemo(() => {
-    if (scope !== 'district') return null
-    return getDistrictHierarchy(context?.district || profile?.district || 'Ahmedabad', range)
-  }, [scope, context?.district, profile?.district, range])
+    if (scope === 'district') return getDistrictHierarchy(context?.district || profile?.district || 'Ahmedabad', range)
+    if (scope === 'state' && hierFilters.district) return getDistrictHierarchy(hierFilters.district, range)
+    return null
+  }, [scope, context?.district, profile?.district, range, hierFilters.district])
 
   const blockHierarchy = useMemo(() => {
     if (scope !== 'block') return null
@@ -1231,11 +1248,14 @@ export default function AttendanceDashboardCanvas({ context }) {
     //   block filter    → one row per cluster inside the block
     //   no filter (DEO) → one row per block inside the district
     //   no filter (BEO) → one row per cluster inside the block
-    if ((scope === 'district' && districtHierarchy) || (scope === 'block' && blockHierarchy)) {
+    if ((scope === 'district' && districtHierarchy) || (scope === 'block' && blockHierarchy) || (scope === 'state' && hierFilters.district && districtHierarchy)) {
       const workingDays = isThirty ? 22 : 6
-      const hierarchy = scope === 'district' ? districtHierarchy : blockHierarchy
-      const allBlocks   = scope === 'district' ? hierarchy.blocks : []
-      const allClusters = scope === 'district'
+      // For State + district filter, use the picked district's hierarchy
+      // (same shape as DEO).
+      const districtMode = scope === 'district' || scope === 'state'
+      const hierarchy = districtMode ? districtHierarchy : blockHierarchy
+      const allBlocks   = districtMode ? hierarchy.blocks : []
+      const allClusters = districtMode
         ? (hierFilters.block
             ? (hierarchy.blocks.find(b => b.name === hierFilters.block)?.clusters || [])
             : hierarchy.blocks.flatMap(b => b.clusters))
@@ -1290,8 +1310,8 @@ export default function AttendanceDashboardCanvas({ context }) {
           return
         }
       }
-      // Block filter (DEO only) — one row per cluster inside the block.
-      if (scope === 'district' && hierFilters.block) {
+      // Block filter (DEO or State+district) — one row per cluster inside the block.
+      if (districtMode && hierFilters.block) {
         const block = hierarchy.blocks.find(b => b.name === hierFilters.block)
         if (block) {
           const rows = block.clusters.map(c => {
@@ -1316,9 +1336,9 @@ export default function AttendanceDashboardCanvas({ context }) {
           return
         }
       }
-      // No filter → district roll-up (one row per block) for DEO, or
-      // block roll-up (one row per cluster) for BEO.
-      if (scope === 'district') {
+      // No filter → district roll-up (one row per block) for DEO and
+      // State+district, or block roll-up (one row per cluster) for BEO.
+      if (districtMode) {
         const rows = allBlocks.map(b => {
           const ts = b.metrics.total
           const presPct = b.metrics.pct
@@ -1334,8 +1354,8 @@ export default function AttendanceDashboardCanvas({ context }) {
         })
         openScopeAttendanceReport({
           title: `District Attendance Report · Last ${windowLabel}`,
-          scopeLabel,
-          scopeFilter: `District · ${scopeLabel}`,
+          scopeLabel: hierFilters.district || scopeLabel,
+          scopeFilter: `District · ${hierFilters.district || scopeLabel}`,
           entityNoun: 'Block',
           dateFrom, dateTo: today,
           rows,
@@ -1576,14 +1596,40 @@ export default function AttendanceDashboardCanvas({ context }) {
         {scope === 'state' && (
           <>
             <RangeTabs range={range} setRange={setRange} onDownload={downloadCurrentReport} />
-            <StateScopeView
-              districtRows={districtRows}
-              top5={stateData.top5}
-              bottom5={stateData.bot5}
-              totals={stateData.totals}
-              onAsk={askAboutChart}
-              range={range}
-            />
+            {hierFilters.district && districtHierarchy ? (
+              <HierarchicalAttendanceView
+                scope="state"
+                hierarchy={districtHierarchy}
+                filters={hierFilters}
+                setFilters={setHierFilters}
+                onAsk={askAboutChart}
+                allDistricts={DISTRICTS.map(d => ({ name: titleCase(d.name) }))}
+              />
+            ) : (
+              <>
+                {/* State user, no district picked yet — show the State view
+                    but with the district filter dropdown row above it so
+                    they can drill in. */}
+                <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #D5D8DF', background: '#FAFBFC', fontFamily: FONT }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, color: '#828996', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Filter</span>
+                  <select
+                    value={hierFilters.district || ''}
+                    onChange={e => setHierFilters({ district: e.target.value, block: '', cluster: '', school: '' })}
+                    style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT }}>
+                    <option value="">All districts ({DISTRICTS.length})</option>
+                    {DISTRICTS.map(d => <option key={d.districtId} value={titleCase(d.name)}>{titleCase(d.name)}</option>)}
+                  </select>
+                </div>
+                <StateScopeView
+                  districtRows={districtRows}
+                  top5={stateData.top5}
+                  bottom5={stateData.bot5}
+                  totals={stateData.totals}
+                  onAsk={askAboutChart}
+                  range={range}
+                />
+              </>
+            )}
           </>
         )}
 

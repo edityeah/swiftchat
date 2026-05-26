@@ -8,6 +8,7 @@ import {
   fetchCanvasReply, mdToHtml,
 } from '../shared/kpiCanvasShared'
 import { getDistrictHierarchy, getBlockHierarchy, schoolsForCluster } from '../../data/attendanceHierarchy'
+import { DISTRICTS, titleCase } from '../../data/registries'
 
 const FONT = 'Montserrat, sans-serif'
 
@@ -426,28 +427,35 @@ export default function KpiInsightCanvas({ context }) {
   // breakdown chart from blocks → clusters → schools while keeping the
   // KPI value at the user's parent jurisdiction (data model doesn't have
   // per-block KPI rollups yet; this drills the entity list shown below).
-  const [hierFilters, setHierFilters] = useState({ block: '', cluster: '', school: '' })
+  const [hierFilters, setHierFilters] = useState({ district: '', block: '', cluster: '', school: '' })
 
   // Reset on KPI change so previous selection doesn't leak across canvases.
   useEffect(() => {
-    setHierFilters({ block: '', cluster: '', school: '' })
+    setHierFilters({ district: '', block: '', cluster: '', school: '' })
   }, [context?.kpiId])
 
-  // Hierarchy used to populate dropdowns.
-  const districtHier = useMemo(
-    () => (role === 'deo') ? getDistrictHierarchy(profile?.district || 'Ahmedabad', 'today') : null,
-    [role, profile?.district]
-  )
+  // Hierarchy used to populate dropdowns. State role builds a district
+  // hierarchy from the picked district filter.
+  const districtHier = useMemo(() => {
+    if (role === 'deo') return getDistrictHierarchy(profile?.district || 'Ahmedabad', 'today')
+    if (role === 'state_secretary' && hierFilters.district) return getDistrictHierarchy(hierFilters.district, 'today')
+    return null
+  }, [role, profile?.district, hierFilters.district])
   const blockHier = useMemo(
     () => (role === 'beo') ? getBlockHierarchy(profile?.block || 'Mehsana', 'today') : null,
     [role, profile?.block]
   )
-  const allBlocksH = role === 'deo' ? (districtHier?.blocks || []) : []
-  const allClustersH = (role === 'deo' && hierFilters.block)
-    ? (districtHier?.blocks.find(b => b.name === hierFilters.block)?.clusters || [])
-    : (role === 'beo' ? (blockHier?.clusters || []) : [])
+  const allDistrictsH = role === 'state_secretary' ? DISTRICTS.map(d => ({ name: titleCase(d.name) })) : []
+  const allBlocksH = (role === 'deo' || (role === 'state_secretary' && hierFilters.district))
+    ? (districtHier?.blocks || []) : []
+  const allClustersH = (() => {
+    if ((role === 'deo' || role === 'state_secretary') && hierFilters.block) {
+      return districtHier?.blocks.find(b => b.name === hierFilters.block)?.clusters || []
+    }
+    return role === 'beo' ? (blockHier?.clusters || []) : []
+  })()
   const allSchoolsH = useMemo(() => {
-    if (role === 'deo' && hierFilters.cluster) {
+    if ((role === 'deo' || role === 'state_secretary') && hierFilters.cluster) {
       return districtHier?.blocks.flatMap(b => b.clusters).find(c => c.name === hierFilters.cluster)?.schools || []
     }
     if (role === 'beo' && hierFilters.cluster) {
@@ -499,6 +507,9 @@ export default function KpiInsightCanvas({ context }) {
     }
     if (hierFilters.block) {
       return allClustersH.slice(0, 8).map(c => ({ label: c.name, value: c.metrics?.pct || 70 }))
+    }
+    if (hierFilters.district && allBlocksH.length) {
+      return allBlocksH.slice(0, 8).map(b => ({ label: b.name, value: b.metrics?.pct || 70 }))
     }
     if (role === 'crc') {
       return allSchoolsH.slice(0, 8).map(s => ({ label: s.name, value: s.metrics?.pct || 70 }))
@@ -583,13 +594,25 @@ export default function KpiInsightCanvas({ context }) {
         {/* Hierarchical filter row — DEO/BEO/CRC drill the breakdown bars
             and entity lists to their sub-scope. Headline value is parent-
             scope until per-entity data lands. */}
-        {(role === 'deo' || role === 'beo' || role === 'crc') && (
+        {(role === 'state_secretary' || role === 'deo' || role === 'beo' || role === 'crc') && (
           <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #D5D8DF', background: '#FAFBFC', fontFamily: FONT }}>
             <span style={{ fontSize: 10.5, fontWeight: 700, color: '#828996', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Filter</span>
-            {role === 'deo' && (
-              <select value={hierFilters.block} onChange={e => setHierFilters({ block: e.target.value, cluster: '', school: '' })}
+            {role === 'state_secretary' && (
+              <select
+                value={hierFilters.district}
+                onChange={e => setHierFilters({ district: e.target.value, block: '', cluster: '', school: '' })}
                 style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT }}>
-                <option value="">All blocks ({allBlocksH.length})</option>
+                <option value="">All districts ({allDistrictsH.length})</option>
+                {allDistrictsH.map(d => <option key={d.name} value={d.name}>{d.name}</option>)}
+              </select>
+            )}
+            {(role === 'deo' || role === 'state_secretary') && (
+              <select
+                value={hierFilters.block}
+                onChange={e => setHierFilters({ ...hierFilters, block: e.target.value, cluster: '', school: '' })}
+                disabled={role === 'state_secretary' && !hierFilters.district}
+                style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: (role === 'state_secretary' && !hierFilters.district) ? 0.5 : 1 }}>
+                <option value="">All blocks{allBlocksH.length ? ` (${allBlocksH.length})` : ''}</option>
                 {allBlocksH.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
               </select>
             )}
@@ -597,8 +620,8 @@ export default function KpiInsightCanvas({ context }) {
               <select
                 value={hierFilters.cluster}
                 onChange={e => setHierFilters({ ...hierFilters, cluster: e.target.value, school: '' })}
-                disabled={role === 'deo' && !hierFilters.block}
-                style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: (role === 'deo' && !hierFilters.block) ? 0.5 : 1 }}>
+                disabled={(role === 'deo' || role === 'state_secretary') && !hierFilters.block}
+                style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: ((role === 'deo' || role === 'state_secretary') && !hierFilters.block) ? 0.5 : 1 }}>
                 <option value="">All clusters{allClustersH.length ? ` (${allClustersH.length})` : ''}</option>
                 {allClustersH.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
               </select>
@@ -611,8 +634,8 @@ export default function KpiInsightCanvas({ context }) {
               <option value="">All schools{allSchoolsH.length ? ` (${allSchoolsH.length})` : ''}</option>
               {allSchoolsH.map(s => <option key={s.schoolid} value={s.schoolid}>{s.name}</option>)}
             </select>
-            {(hierFilters.block || hierFilters.cluster || hierFilters.school) && (
-              <button onClick={() => setHierFilters({ block: '', cluster: '', school: '' })}
+            {(hierFilters.district || hierFilters.block || hierFilters.cluster || hierFilters.school) && (
+              <button onClick={() => setHierFilters({ district: '', block: '', cluster: '', school: '' })}
                 style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, background: '#FEE2E2', color: '#B91C1C', border: '1px solid #FECACA', cursor: 'pointer', fontFamily: FONT }}>
                 Clear filters ×
               </button>
@@ -673,6 +696,7 @@ export default function KpiInsightCanvas({ context }) {
               hierFilters.school ? 'Selected school' :
               hierFilters.cluster ? `Schools in ${hierFilters.cluster}` :
               hierFilters.block ? `Clusters in ${hierFilters.block}` :
+              hierFilters.district ? `Blocks in ${hierFilters.district}` :
               role === 'state_secretary' ? 'Top districts' :
               role === 'deo'              ? 'Blocks in district' :
               role === 'beo'              ? 'Schools in block' :

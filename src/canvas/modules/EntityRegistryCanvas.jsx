@@ -238,10 +238,20 @@ export default function EntityRegistryCanvas({ context }) {
     agg = { schools: AGGREGATES.totalSchools, teachers: AGGREGATES.totalTeachers, students: AGGREGATES.totalStudents, label: 'Gujarat' }
   }
 
+  // Title count — match the tile (master count from districts.json), not
+  // the truncated row list. The table itself is capped at SYNTH cap for
+  // browser perf, but the headline must always equal the home tile so
+  // 3,968 schools = 3,968 schools.
+  const masterCount =
+    kind === 'districts' ? displayRows.length :
+    kind === 'schools'   ? (agg.schools ?? displayRows.length) :
+                           (agg.teachers ?? displayRows.length)
+  const isTruncated = displayRows.length < masterCount
+
   const titleNoun =
-    kind === 'districts' ? (displayRows.length === 1 ? 'district' : 'districts') :
-    kind === 'schools'   ? (displayRows.length === 1 ? 'school'   : 'schools')   :
-                           (displayRows.length === 1 ? 'teacher'  : 'teachers')
+    kind === 'districts' ? (masterCount === 1 ? 'district' : 'districts') :
+    kind === 'schools'   ? (masterCount === 1 ? 'school'   : 'schools')   :
+                           (masterCount === 1 ? 'teacher'  : 'teachers')
 
   const scopeLabel =
     scope === 'school' && context?.schoolName ? `at ${context.schoolName}` :
@@ -256,9 +266,14 @@ export default function EntityRegistryCanvas({ context }) {
           {scope && target ? scopeLabel.replace(/^(at|in) /, '') : 'State of Gujarat'}
         </div>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#0E0E0E', lineHeight: '26px', marginTop: 2 }}>
-          {displayRows.length.toLocaleString()} {titleNoun}
+          {Number(masterCount).toLocaleString()} {titleNoun}
           {kind === 'schools' && !scope && (
             <span style={{ fontSize: 13, color: '#828996', fontWeight: 500 }}> (sample from {compactNumber(AGGREGATES.totalSchools)})</span>
+          )}
+          {isTruncated && (
+            <span style={{ fontSize: 12, color: '#828996', fontWeight: 500, marginLeft: 8 }}>
+              · showing first {displayRows.length.toLocaleString()}
+            </span>
           )}
         </h2>
 
