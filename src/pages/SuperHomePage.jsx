@@ -1831,15 +1831,17 @@ function getRoleAlerts(role, profile) {
   if (role === 'deo') {
     const district = profile?.district || 'Ahmedabad'
     const agg = aggregatesFor('district', district) || {}
-    // Both forScope functions cap at 500 — registry canvas shows the same.
-    // Tile = canvas count by construction.
-    const schoolCount  = schoolsForScope({ district }).length
-    const teacherCount = teachersForScope({ district }).length
+    // For DEO scope (~4K schools, ~41K teachers per Ahmedabad master), show
+    // the actual aggregate on the tile. The registry canvas shows the first
+    // N (synth-capped) with a sampling banner — that gap is documented in
+    // the canvas itself, not hidden by clamping the tile.
     return [
-      { icon: '🏫', label: 'Schools', value: schoolCount.toLocaleString(), color: '#386AF6',
+      { icon: '🏫', label: 'Schools', value: (agg.schools || 0).toLocaleString(), color: '#386AF6',
         canvas: { type: 'registry', kind: 'schools', scope: 'district', district } },
-      { icon: '👩‍🏫', label: 'Teachers', value: teacherCount.toLocaleString(), color: '#7C3AED',
+      { icon: '👩‍🏫', label: 'Teachers', value: agg.teachers ? `${(agg.teachers/1000).toFixed(1)}K` : '—', color: '#7C3AED',
         canvas: { type: 'registry', kind: 'teachers', scope: 'district', district } },
+      { icon: '🧭', label: 'Blocks', value: String(agg.blocks || '—'), color: '#0EA5E9',
+        canvas: { type: 'attendance-dashboard', scope: 'district', district } },
       { icon: '👥', label: 'Students', value: agg.students ? `${(agg.students/1e5).toFixed(1)}L` : '—', color: '#059669',
         canvas: { type: 'dashboard', scope: 'district', district } },
       { icon: '⚠️', label: 'At-risk', value: '142', color: '#DC2626',
@@ -1956,7 +1958,17 @@ function WelcomeScreen({ botName, onChip, role, profile, onOpenCanvas }) {
               {TIME_GREET}, {firstName}!
             </h1>
             <p style={{ ...bodyMedium, color: '#7383A5' }}>
-              {roleLabel} · VSK Gujarat
+              {roleLabel} · {
+                // Show the user's actual jurisdiction, not just "VSK Gujarat".
+                // DEO: "Ahmedabad district". BEO: "Anand block". CRC:
+                // "ANAND-6 cluster". Principal/Teacher: school name.
+                role === 'deo' && profile?.district ? `${profile.district} district`
+                : role === 'state_secretary' ? 'Gujarat state'
+                : role === 'beo' && profile?.block ? `${profile.block} block`
+                : role === 'crc' && profile?.cluster ? `${profile.cluster} cluster`
+                : (role === 'principal' || role === 'teacher') && profile?.school ? profile.school
+                : 'VSK Gujarat'
+              }
             </p>
           </div>
         </div>

@@ -8,6 +8,7 @@ import {
   STUDENTS, SCHOOL_INFO,
   get30DayClassAttendance, get30DayStudentSummaries, get30DaySchoolAttendance,
 } from '../../data/mockData'
+import { getDistrictHierarchy, getBlockHierarchy, getClusterHierarchy } from '../../data/attendanceHierarchy'
 import {
   ChartCard, InteractiveTrendChart, DragHandle, useResizableChat, ChatPanel,
   fetchCanvasReply, mdToHtml,
@@ -235,7 +236,7 @@ function RangeTabs({ range, setRange, onDownload }) {
           </button>
         ))}
       </div>
-      {onDownload && range === '30d' && (
+      {onDownload && (
         <button
           // IMPORTANT: wrap in an arrow fn so React's synthetic event isn't
           // passed as the first arg to downloadCurrentReport(). When it was
@@ -709,6 +710,188 @@ function StateScopeView({ districtRows, top5, bottom5, totals, byMgmt, onAsk }) 
   )
 }
 
+// ─── Hierarchical attendance view (DEO + BEO) ──────────────────────────────
+// Tree-style drilldown: District → blocks → clusters → schools (DEO scope)
+// or Block → clusters → schools (BEO scope). Click any node to expand its
+// children. Filters at the top let the user jump straight to a level.
+// `filters` is { block, cluster, school } — the parent canvas owns state so
+// the download button knows the active filter.
+function HierarchicalAttendanceView({ scope, hierarchy, filters, setFilters, onAsk }) {
+  const [expanded, setExpanded] = useState(() => new Set())
+  function toggleKey(key) {
+    setExpanded(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n })
+  }
+  // Auto-expand the path of the selected filter so the user sees the nested
+  // entity without an extra click.
+  useEffect(() => {
+    const next = new Set(expanded)
+    if (filters.block)   next.add('b:' + filters.block)
+    if (filters.cluster) next.add('c:' + filters.cluster)
+    setExpanded(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.block, filters.cluster])
+
+  const blocks = scope === 'district'
+    ? (filters.block ? hierarchy.blocks.filter(b => b.name === filters.block) : hierarchy.blocks)
+    : null
+  const clusters = scope === 'block'
+    ? (filters.cluster ? hierarchy.clusters.filter(c => c.name === filters.cluster) : hierarchy.clusters)
+    : null
+  // CRC scope: flat list of schools inside their cluster.
+  const clusterSchools = scope === 'cluster'
+    ? (filters.school ? hierarchy.schools.filter(s => String(s.schoolid) === String(filters.school)) : hierarchy.schools)
+    : null
+  // For Block selectors — DEO only — pull all blocks; BEO doesn't need it.
+  const allBlocks   = scope === 'district' ? hierarchy.blocks : []
+  const allClusters = (scope === 'district' && filters.block)
+    ? (hierarchy.blocks.find(b => b.name === filters.block)?.clusters || [])
+    : (scope === 'block' ? hierarchy.clusters : [])
+  const allSchools  = (() => {
+    if (scope === 'district' && filters.cluster) {
+      return hierarchy.blocks.flatMap(b => b.clusters).find(c => c.name === filters.cluster)?.schools || []
+    }
+    if (scope === 'block' && filters.cluster) {
+      return hierarchy.clusters.find(c => c.name === filters.cluster)?.schools || []
+    }
+    if (scope === 'cluster') {
+      return hierarchy.schools || []
+    }
+    return []
+  })()
+
+  const toneFor = pct => pct >= 90 ? { bg: '#D1FAE5', fg: '#065F46' } : pct >= 75 ? { bg: '#FEF3C7', fg: '#92400E' } : { bg: '#FEE2E2', fg: '#B91C1C' }
+
+  function Row({ name, metrics, depth, isExpandable, isExpanded, onClick, italic }) {
+    const t = toneFor(metrics.pct)
+    return (
+      <div
+        onClick={isExpandable ? onClick : undefined}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 10px', paddingLeft: 10 + depth * 16,
+          borderTop: '1px solid #F1F5F9',
+          cursor: isExpandable ? 'pointer' : 'default',
+          background: depth === 0 ? '#FFFFFF' : depth === 1 ? '#FAFBFC' : '#F8FAFC',
+          fontFamily: FONT,
+        }}
+      >
+        <span style={{ width: 14, color: '#7383A5', fontSize: 11 }}>
+          {isExpandable ? (isExpanded ? '▼' : '▶') : '·'}
+        </span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: depth === 0 ? 700 : 600, color: '#0E0E0E', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontStyle: italic ? 'italic' : 'normal' }}>
+          {name}
+        </span>
+        <span style={{ fontSize: 11, color: '#7383A5', whiteSpace: 'nowrap' }}>
+          {metrics.present.toLocaleString()} / {metrics.total.toLocaleString()}
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: t.bg, color: t.fg, minWidth: 52, textAlign: 'right' }}>
+          {metrics.pct}%
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {/* Filter row */}
+      <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #D5D8DF', background: '#FAFBFC', fontFamily: FONT }}>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: '#828996', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Filter</span>
+        {scope === 'district' && (
+          <select value={filters.block} onChange={e => setFilters({ block: e.target.value, cluster: '', school: '' })}
+            style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT }}>
+            <option value="">All blocks ({allBlocks.length})</option>
+            {allBlocks.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+          </select>
+        )}
+        {/* Cluster dropdown — DEO/BEO only; CRC is already locked to ONE cluster. */}
+        {scope !== 'cluster' && (
+          <select
+            value={filters.cluster}
+            onChange={e => setFilters({ ...filters, cluster: e.target.value, school: '' })}
+            disabled={scope === 'district' && !filters.block}
+            style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: (scope === 'district' && !filters.block) ? 0.5 : 1 }}>
+            <option value="">All clusters{allClusters.length ? ` (${allClusters.length})` : ''}</option>
+            {allClusters.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+          </select>
+        )}
+        <select
+          value={filters.school}
+          onChange={e => setFilters({ ...filters, school: e.target.value })}
+          disabled={scope !== 'cluster' && !filters.cluster}
+          style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: (scope !== 'cluster' && !filters.cluster) ? 0.5 : 1 }}>
+          <option value="">All schools{allSchools.length ? ` (${allSchools.length})` : ''}</option>
+          {allSchools.map(s => <option key={s.schoolid} value={s.schoolid}>{s.name}</option>)}
+        </select>
+        {(filters.block || filters.cluster || filters.school) && (
+          <button onClick={() => setFilters({ block: '', cluster: '', school: '' })}
+            style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, background: '#FEE2E2', color: '#B91C1C', border: '1px solid #FECACA', cursor: 'pointer', fontFamily: FONT }}>
+            Clear filters ×
+          </button>
+        )}
+      </div>
+
+      {/* Headline rollup totals */}
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <StatCard
+          label={scope === 'district' ? 'Blocks' : scope === 'block' ? 'Clusters' : 'Schools'}
+          value={scope === 'district' ? hierarchy.blocks.length : scope === 'block' ? hierarchy.clusters.length : (hierarchy.schools?.length || 0)}
+          accent="#0EA5E9"
+        />
+        <StatCard label="Students enrolled" value={hierarchy.totals.total.toLocaleString()} accent="#3B82F6" />
+        <StatCard label="Avg attendance" value={`${hierarchy.totals.pct}%`} sub={`${hierarchy.totals.present.toLocaleString()} present`} accent="#10B981" statusPct={hierarchy.totals.pct} />
+      </div>
+
+      {/* Hierarchy list */}
+      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'auto hidden' }}>
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid #D5D8DF', background: '#FAFBFC', fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+          {scope === 'district' ? 'District → Block → Cluster → School' : scope === 'block' ? 'Block → Cluster → School' : 'Cluster → School'} · {scope === 'cluster' ? 'flat list' : 'click rows to expand'}
+        </div>
+
+        {(scope === 'district' ? blocks : null)?.map(block => {
+          const bk = 'b:' + block.name
+          const blockOpen = expanded.has(bk)
+          return (
+            <div key={bk}>
+              <Row name={block.name} metrics={block.metrics} depth={0} isExpandable isExpanded={blockOpen} onClick={() => toggleKey(bk)} />
+              {blockOpen && block.clusters.map(cluster => {
+                const ck = 'c:' + cluster.name
+                const clusterOpen = expanded.has(ck) && (!filters.cluster || filters.cluster === cluster.name)
+                const visibleClusters = filters.cluster ? block.clusters.filter(c => c.name === filters.cluster) : block.clusters
+                if (filters.cluster && cluster.name !== filters.cluster) return null
+                return (
+                  <div key={ck}>
+                    <Row name={cluster.name} metrics={cluster.metrics} depth={1} isExpandable isExpanded={clusterOpen} onClick={() => toggleKey(ck)} />
+                    {clusterOpen && cluster.schools.filter(s => !filters.school || String(s.schoolid) === String(filters.school)).map(school => (
+                      <Row key={'s:' + school.schoolid} name={school.name} metrics={school.metrics} depth={2} />
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })}
+
+        {(scope === 'block' ? clusters : null)?.map(cluster => {
+          const ck = 'c:' + cluster.name
+          const clusterOpen = expanded.has(ck)
+          return (
+            <div key={ck}>
+              <Row name={cluster.name} metrics={cluster.metrics} depth={0} isExpandable isExpanded={clusterOpen} onClick={() => toggleKey(ck)} />
+              {clusterOpen && cluster.schools.filter(s => !filters.school || String(s.schoolid) === String(filters.school)).map(school => (
+                <Row key={'s:' + school.schoolid} name={school.name} metrics={school.metrics} depth={1} />
+              ))}
+            </div>
+          )
+        })}
+
+        {(scope === 'cluster' ? clusterSchools : null)?.map(school => (
+          <Row key={'s:' + school.schoolid} name={school.name} metrics={school.metrics} depth={0} />
+        ))}
+      </div>
+    </>
+  )
+}
+
 // ─── Main canvas ────────────────────────────────────────────────────────────
 export default function AttendanceDashboardCanvas({ context }) {
   const { role, userProfile, openCanvas } = useApp()
@@ -806,6 +989,35 @@ export default function AttendanceDashboardCanvas({ context }) {
 
   // Today vs Last-30-days. The toggle pill is in every scope view.
   const [range, setRange] = useState('today')
+
+  // Hierarchical filter state for DEO (district) + BEO (block). Drives both
+  // the drilldown view and the download report button — so when the user
+  // picks a block / cluster / school, the PDF is at that exact level.
+  const [hierFilters, setHierFilters] = useState({ block: '', cluster: '', school: '' })
+
+  // Reset filters whenever the scope changes (avoid stale block selection
+  // leaking from DEO into BEO etc).
+  useEffect(() => {
+    setHierFilters({ block: '', cluster: '', school: '' })
+  }, [scope])
+
+  // Build the hierarchical tree once per (scope, jurisdiction, range).
+  // For DEO: blocks → clusters → schools rooted at the district.
+  // For BEO: clusters → schools rooted at the block.
+  const districtHierarchy = useMemo(() => {
+    if (scope !== 'district') return null
+    return getDistrictHierarchy(context?.district || profile?.district || 'Ahmedabad', range)
+  }, [scope, context?.district, profile?.district, range])
+
+  const blockHierarchy = useMemo(() => {
+    if (scope !== 'block') return null
+    return getBlockHierarchy(context?.block || profile?.block || 'Mehsana', range)
+  }, [scope, context?.block, profile?.block, range])
+
+  const clusterHierarchy = useMemo(() => {
+    if (scope !== 'cluster') return null
+    return getClusterHierarchy(context?.cluster || profile?.cluster || 'MADHAPAR', context?.block || profile?.block, range)
+  }, [scope, context?.cluster, profile?.cluster, context?.block, profile?.block, range])
 
   // Scope-aware data builders. Computed once at the parent so the rendered
   // view and the chat handler always quote the same numbers.
@@ -1012,8 +1224,197 @@ export default function AttendanceDashboardCanvas({ context }) {
       return
     }
 
-    // ── Cluster / Block / District ── one row per school in scope ───────
-    if (['cluster', 'block', 'district'].includes(scope) && scopedSchoolsData) {
+    // ── DEO (district) + BEO (block) ── filter-aware drilldown reports ──
+    // The report level matches the active filter dropdown:
+    //   school filter   → one row per student-day rollup for that school
+    //   cluster filter  → one row per school inside the cluster
+    //   block filter    → one row per cluster inside the block
+    //   no filter (DEO) → one row per block inside the district
+    //   no filter (BEO) → one row per cluster inside the block
+    if ((scope === 'district' && districtHierarchy) || (scope === 'block' && blockHierarchy)) {
+      const workingDays = isThirty ? 22 : 6
+      const hierarchy = scope === 'district' ? districtHierarchy : blockHierarchy
+      const allBlocks   = scope === 'district' ? hierarchy.blocks : []
+      const allClusters = scope === 'district'
+        ? (hierFilters.block
+            ? (hierarchy.blocks.find(b => b.name === hierFilters.block)?.clusters || [])
+            : hierarchy.blocks.flatMap(b => b.clusters))
+        : hierarchy.clusters
+      // School filter wins — single-school PDF showing the schools we have.
+      if (hierFilters.school) {
+        const school = allClusters.flatMap(c => c.schools).find(s => String(s.schoolid) === String(hierFilters.school))
+        if (school) {
+          const presPct = school.metrics.pct
+          const ts = school.metrics.total
+          openScopeAttendanceReport({
+            title: `School Attendance Report · Last ${windowLabel}`,
+            scopeLabel: school.name,
+            scopeFilter: `School · ${school.schoolid}`,
+            entityNoun: 'School',
+            dateFrom, dateTo: today,
+            rows: [{
+              entity: school.name,
+              code: school.schoolid || '—',
+              totalStudents: ts,
+              present: Math.round(ts * workingDays * (presPct / 100)),
+              absent:  Math.round(ts * workingDays * (1 - presPct / 100)),
+              pct: presPct, submitted: 1, total: 1,
+            }],
+          })
+          return
+        }
+      }
+      // Cluster filter — list every school in the cluster.
+      if (hierFilters.cluster) {
+        const cluster = allClusters.find(c => c.name === hierFilters.cluster)
+        if (cluster) {
+          const rows = cluster.schools.map(s => {
+            const ts = s.metrics.total
+            const presPct = s.metrics.pct
+            return {
+              entity: s.name, code: s.schoolid || '—',
+              totalStudents: ts,
+              present: Math.round(ts * workingDays * (presPct / 100)),
+              absent:  Math.round(ts * workingDays * (1 - presPct / 100)),
+              pct: presPct, submitted: 1, total: 1,
+            }
+          })
+          openScopeAttendanceReport({
+            title: `Cluster Attendance Report · Last ${windowLabel}`,
+            scopeLabel: `${cluster.name}${hierFilters.block ? ` (${hierFilters.block})` : ''}`,
+            scopeFilter: `Cluster · ${cluster.name}`,
+            entityNoun: 'School',
+            dateFrom, dateTo: today,
+            rows,
+          })
+          return
+        }
+      }
+      // Block filter (DEO only) — one row per cluster inside the block.
+      if (scope === 'district' && hierFilters.block) {
+        const block = hierarchy.blocks.find(b => b.name === hierFilters.block)
+        if (block) {
+          const rows = block.clusters.map(c => {
+            const ts = c.metrics.total
+            const presPct = c.metrics.pct
+            return {
+              entity: c.name, code: `${c.schools.length} schools`,
+              totalStudents: ts,
+              present: Math.round(ts * workingDays * (presPct / 100)),
+              absent:  Math.round(ts * workingDays * (1 - presPct / 100)),
+              pct: presPct, submitted: c.schools.length, total: c.schools.length,
+            }
+          })
+          openScopeAttendanceReport({
+            title: `Block Attendance Report · Last ${windowLabel}`,
+            scopeLabel: `${block.name} block, ${scopeLabel}`,
+            scopeFilter: `Block · ${block.name}`,
+            entityNoun: 'Cluster',
+            dateFrom, dateTo: today,
+            rows,
+          })
+          return
+        }
+      }
+      // No filter → district roll-up (one row per block) for DEO, or
+      // block roll-up (one row per cluster) for BEO.
+      if (scope === 'district') {
+        const rows = allBlocks.map(b => {
+          const ts = b.metrics.total
+          const presPct = b.metrics.pct
+          return {
+            entity: b.name, code: `${b.clusters.length} clusters`,
+            totalStudents: ts,
+            present: Math.round(ts * workingDays * (presPct / 100)),
+            absent:  Math.round(ts * workingDays * (1 - presPct / 100)),
+            pct: presPct,
+            submitted: b.clusters.reduce((a, c) => a + c.schools.length, 0),
+            total: b.clusters.reduce((a, c) => a + c.schools.length, 0),
+          }
+        })
+        openScopeAttendanceReport({
+          title: `District Attendance Report · Last ${windowLabel}`,
+          scopeLabel,
+          scopeFilter: `District · ${scopeLabel}`,
+          entityNoun: 'Block',
+          dateFrom, dateTo: today,
+          rows,
+        })
+        return
+      }
+      // BEO no filter — list clusters
+      const rows = hierarchy.clusters.map(c => {
+        const ts = c.metrics.total
+        const presPct = c.metrics.pct
+        return {
+          entity: c.name, code: `${c.schools.length} schools`,
+          totalStudents: ts,
+          present: Math.round(ts * workingDays * (presPct / 100)),
+          absent:  Math.round(ts * workingDays * (1 - presPct / 100)),
+          pct: presPct, submitted: c.schools.length, total: c.schools.length,
+        }
+      })
+      openScopeAttendanceReport({
+        title: `Block Attendance Report · Last ${windowLabel}`,
+        scopeLabel,
+        scopeFilter: `Block · ${scopeLabel}`,
+        entityNoun: 'Cluster',
+        dateFrom, dateTo: today,
+        rows,
+      })
+      return
+    }
+
+    // ── Cluster (CRC) ── filter-aware: school filter → single school PDF,
+    // no filter → list of every school in the cluster (incl. synth-padded)
+    if (scope === 'cluster' && clusterHierarchy) {
+      const workingDays = isThirty ? 22 : 6
+      if (hierFilters.school) {
+        const school = clusterHierarchy.schools.find(s => String(s.schoolid) === String(hierFilters.school))
+        if (school) {
+          const ts = school.metrics.total
+          const presPct = school.metrics.pct
+          openScopeAttendanceReport({
+            title: `School Attendance Report · Last ${windowLabel}`,
+            scopeLabel: school.name,
+            scopeFilter: `School · ${school.schoolid}`,
+            entityNoun: 'School',
+            dateFrom, dateTo: today,
+            rows: [{
+              entity: school.name, code: school.schoolid || '—',
+              totalStudents: ts,
+              present: Math.round(ts * workingDays * (presPct / 100)),
+              absent:  Math.round(ts * workingDays * (1 - presPct / 100)),
+              pct: presPct, submitted: 1, total: 1,
+            }],
+          })
+          return
+        }
+      }
+      const rows = clusterHierarchy.schools.map(s => {
+        const ts = s.metrics.total
+        const presPct = s.metrics.pct
+        return {
+          entity: s.name, code: s.schoolid || '—',
+          totalStudents: ts,
+          present: Math.round(ts * workingDays * (presPct / 100)),
+          absent:  Math.round(ts * workingDays * (1 - presPct / 100)),
+          pct: presPct, submitted: 1, total: 1,
+        }
+      })
+      openScopeAttendanceReport({
+        title: `Cluster Attendance Report · Last ${windowLabel}`,
+        scopeLabel,
+        scopeFilter: `Cluster · ${scopeLabel}`,
+        entityNoun: 'School',
+        dateFrom, dateTo: today,
+        rows,
+      })
+      return
+    }
+
+    // ── Legacy cluster path (fallback) ── one row per school in scope ───
+    if (scope === 'cluster' && scopedSchoolsData) {
       const workingDays = isThirty ? 22 : 6   // approx working days in window
       const rows = scopedSchoolsData.rows.map(s => {
         const ts = s.students || 0
@@ -1118,18 +1519,57 @@ export default function AttendanceDashboardCanvas({ context }) {
               : <SchoolScopeView30d data={schoolData30} onAsk={askAboutChart} />}
           </>
         )}
-        {['block', 'cluster', 'district'].includes(scope) && scopedSchoolsData && (
+        {scope === 'district' && districtHierarchy && (
           <>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Attendance · District level
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0E0E0E', lineHeight: '24px', marginTop: 2 }}>
+              {scopeLabel} — {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </h2>
             <RangeTabs range={range} setRange={setRange} onDownload={downloadCurrentReport} />
-            <ScopedSchoolsView
-              scope={scope}
-              scopeLabel={scopeLabel}
-              scopedSchools={scopedSchoolsData.rows}
-              totals={scopedSchoolsData.totals}
-              topRows={scopedSchoolsData.top}
-              botRows={scopedSchoolsData.bot}
+            <HierarchicalAttendanceView
+              scope="district"
+              hierarchy={districtHierarchy}
+              filters={hierFilters}
+              setFilters={setHierFilters}
               onAsk={askAboutChart}
-              range={range}
+            />
+          </>
+        )}
+        {scope === 'block' && blockHierarchy && (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Attendance · Block level
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0E0E0E', lineHeight: '24px', marginTop: 2 }}>
+              {scopeLabel} — {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </h2>
+            <RangeTabs range={range} setRange={setRange} onDownload={downloadCurrentReport} />
+            <HierarchicalAttendanceView
+              scope="block"
+              hierarchy={blockHierarchy}
+              filters={hierFilters}
+              setFilters={setHierFilters}
+              onAsk={askAboutChart}
+            />
+          </>
+        )}
+        {scope === 'cluster' && clusterHierarchy && (
+          <>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              Attendance · Cluster level
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0E0E0E', lineHeight: '24px', marginTop: 2 }}>
+              {scopeLabel} — {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </h2>
+            <RangeTabs range={range} setRange={setRange} onDownload={downloadCurrentReport} />
+            <HierarchicalAttendanceView
+              scope="cluster"
+              hierarchy={clusterHierarchy}
+              filters={hierFilters}
+              setFilters={setHierFilters}
+              onAsk={askAboutChart}
             />
           </>
         )}

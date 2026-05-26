@@ -5,7 +5,9 @@ import {
   subjectsForGrade, classAssessmentRollup, schoolAssessmentRollup,
   studentsForAssessment, scopedAssessmentBreakdown,
   participationForScope, PROFICIENCY_THRESHOLD,
+  _assessHash, _assessRollup,
 } from '../../data/assessmentData'
+import { getDistrictHierarchy, getBlockHierarchy, schoolsForCluster } from '../../data/attendanceHierarchy'
 import { openStudentReportCard, openBulkStudentReportCards } from '../shared/studentReportCard'
 import { openScopeAttendanceReport, openStudentAttendanceReport } from '../shared/attendanceReport'
 import { openParticipationPdfForScope } from '../shared/participationReport'
@@ -402,26 +404,183 @@ export default function AssessmentDashboardCanvas({ context }) {
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
 
-  // Per-scope data
-  const classData  = useMemo(() => classAssessmentRollup(grade, subject), [grade, subject])
-  const schoolData = useMemo(() => schoolAssessmentRollup(subject),       [subject])
-  const scopedBreakdown = useMemo(() => scopedAssessmentBreakdown(scope, subject), [scope, subject])
-  const students  = useMemo(() => studentsForAssessment(grade, subject),  [grade, subject])
-  // NEW: scope-aware table (student-level for teacher/principal,
-  // school-level for cluster, etc.) — single source of truth for the
-  // table at the bottom AND the download generator.
-  const scopeTable = useMemo(
-    () => participationForScope({ scope, role, profile, subject, grade }),
-    [scope, role, profile, subject, grade]
+  // ── Hierarchical filters (DEO + BEO only) ──────────────────────────────
+  // Same UX as the Attendance Dashboard: block / cluster / school dropdowns
+  // that drill the entire canvas — table, headline, downloads — to that
+  // sub-scope. When a filter is set we "promote" the effective scope as
+  // though the user were a BEO / CRC / Principal viewing that entity.
+  const [hierFilters, setHierFilters] = useState({ block: '', cluster: '', school: '' })
+
+  // Cached hierarchy used to populate the dropdowns. Range doesn't matter
+  // for assessment — we only use it for the entity tree.
+  const districtHier = useMemo(
+    () => (scope === 'district') ? getDistrictHierarchy(profile?.district || 'Ahmedabad', 'today') : null,
+    [scope, profile?.district]
+  )
+  const blockHier = useMemo(
+    () => (scope === 'block') ? getBlockHierarchy(profile?.block || 'Mehsana', 'today') : null,
+    [scope, profile?.block]
   )
 
-  // Headline = class data (teacher) / school data (others)
-  const headline = scope === 'class' ? classData : schoolData
+  // Dropdown option sources — cascading based on parent selection.
+  const allBlocks = scope === 'district' ? (districtHier?.blocks || []) : []
+  const allClusters = (scope === 'district' && hierFilters.block)
+    ? (districtHier?.blocks.find(b => b.name === hierFilters.block)?.clusters || [])
+    : (scope === 'block' ? (blockHier?.clusters || []) : [])
+  // Schools list — comes from the hierarchy when a parent filter is active,
+  // OR straight from the CRC's own cluster (no parent filter needed since
+  // they're already scoped to their cluster).
+  const allSchools = useMemo(() => {
+    if (scope === 'district' && hierFilters.cluster) {
+      return districtHier?.blocks.flatMap(b => b.clusters).find(c => c.name === hierFilters.cluster)?.schools || []
+    }
+    if (scope === 'block' && hierFilters.cluster) {
+      return blockHier?.clusters.find(c => c.name === hierFilters.cluster)?.schools || []
+    }
+    if (scope === 'cluster') {
+      // CRC: list all schools in their cluster (real + synth-padded). Convert
+      // to hierarchy-shape so the override scopeTable can re-use the same
+      // `metrics.total` fallback path as block/district drill-downs.
+      return schoolsForCluster(profile?.cluster || 'MADHAPAR', profile?.block).map(s => ({
+        schoolid: s.schoolid,
+        name: s.school,
+        metrics: { total: s.students || 100, present: 0, absent: 0, pct: 0 },
+      }))
+    }
+    return []
+  }, [scope, hierFilters.cluster, hierFilters.block, districtHier, blockHier, profile?.cluster, profile?.block])
+
+  // Compute the EFFECTIVE scope + profile based on the active filter so all
+  // downstream data (table, headline, downloads) drills to the selection.
+  // - school filter → effective 'school' (one entity)
+  // - cluster filter → effective 'cluster' (CRC view)
+  // - block filter (DEO only) → effective 'block' (BEO view)
+  // - no filter → keep the user's role-driven scope
+  const effective = useMemo(() => {
+    if (hierFilters.school) {
+      const school = allSchools.find(s => String(s.schoolid) === String(hierFilters.school))
+      return {
+        scope: 'school',
+        profile: {
+          ...profile,
+          school: school?.name || 'Selected school',
+          schoolId: school?.schoolid,
+          cluster: hierFilters.cluster || profile?.cluster,
+          block: hierFilters.block || profile?.block,
+        },
+      }
+    }
+    if (hierFilters.cluster) {
+      return { scope: 'cluster', profile: { ...profile, cluster: hierFilters.cluster, block: hierFilters.block || profile?.block } }
+    }
+    if (hierFilters.block && scope === 'district') {
+      return { scope: 'block', profile: { ...profile, block: hierFilters.block } }
+    }
+    return { scope, profile }
+  }, [hierFilters.block, hierFilters.cluster, hierFilters.school, scope, profile, allSchools])
+
+  // CRC's cluster view: by default the user has no school filter, but we
+  // still want the table to list every school in their cluster (real +
+  // synth-padded). Treat "CRC, no filter" the same as "CRC with implicit
+  // cluster filter = profile.cluster" so the scopeTable override kicks in.
+  const crcImplicitCluster = scope === 'cluster' && !hierFilters.school && !hierFilters.cluster
+    ? (profile?.cluster || 'MADHAPAR')
+    : ''
+
+  // Per-scope data — use EFFECTIVE scope so filters drill the view.
+  const classData  = useMemo(() => classAssessmentRollup(grade, subject), [grade, subject])
+  const schoolData = useMemo(() => schoolAssessmentRollup(subject),       [subject])
+  const scopedBreakdown = useMemo(() => scopedAssessmentBreakdown(effective.scope, subject), [effective.scope, subject])
+  const students  = useMemo(() => studentsForAssessment(grade, subject),  [grade, subject])
+  const rawScopeTable = useMemo(
+    () => participationForScope({ scope: effective.scope, role, profile: effective.profile, subject, grade }),
+    [effective.scope, role, effective.profile, subject, grade]
+  )
+
+  // When a hierarchical filter is active, rebuild the scope table directly
+  // from the same hierarchy used to populate the dropdowns. This guarantees
+  // the table shows EVERY entity the dropdown listed — e.g. if the cluster
+  // dropdown shows 4 schools (real + synth-padded), the table also lists 4
+  // schools, not just the 1-2 real ones from the registry sample.
+  const scopeTable = useMemo(() => {
+    if (!hierFilters.block && !hierFilters.cluster && !hierFilters.school && !crcImplicitCluster) return rawScopeTable
+    // CRC default (no explicit filter) → behave as if cluster filter was set
+    // to their own cluster, so the table shows every school in the cluster.
+    const activeCluster = hierFilters.cluster || crcImplicitCluster
+    function rollupFor(key, total) {
+      const r = _assessRollup(_assessHash(`${key}|${subject}|${grade}`), total)
+      return { total, submitted: r.submitted, pct: r.pct, present: r.present, absent: r.absent }
+    }
+    // School filter — single-row table for the picked school.
+    if (hierFilters.school) {
+      const school = allSchools.find(s => String(s.schoolid) === String(hierFilters.school))
+      if (school) {
+        const per = Math.max(15, Math.round((school.metrics?.total || 100) / 8))
+        const r = rollupFor(`${school.schoolid}|school`, per)
+        return {
+          kind: 'school', entityNoun: 'School',
+          scope: 'school', scopeLabel: school.name,
+          rows: [{ name: school.name, code: String(school.schoolid), ...r }],
+          totals: { ...r },
+        }
+      }
+    }
+    // Cluster filter (explicit OR CRC default) — one row per school in
+    // the cluster, using the synth-padded list so dropdown == table.
+    if (activeCluster) {
+      const schools = allSchools
+      const rows = schools.map(s => {
+        const per = Math.max(15, Math.round((s.metrics?.total || 100) / 8))
+        const r = rollupFor(`${s.schoolid}|school`, per)
+        return { name: s.name, code: String(s.schoolid), ...r }
+      }).sort((a, b) => b.pct - a.pct)
+      const totals = rows.reduce((acc, r) => ({
+        total: acc.total + r.total, submitted: acc.submitted + r.submitted,
+        present: acc.present + r.present, absent: acc.absent + r.absent,
+      }), { total: 0, submitted: 0, present: 0, absent: 0 })
+      totals.pct = totals.total ? +((totals.submitted / totals.total) * 100).toFixed(1) : 0
+      return { kind: 'schools', entityNoun: 'School', scope: 'cluster', scopeLabel: activeCluster, rows, totals }
+    }
+    // Block filter — one row per cluster in the block (uses hierarchy clusters)
+    if (hierFilters.block) {
+      const clusters = allClusters
+      const rows = clusters.map(c => {
+        const per = c.schools.reduce((a, s) => a + Math.max(15, Math.round((s.metrics?.total || 100) / 8)), 0)
+        const r = rollupFor(`${c.name}|cluster`, per)
+        return { name: c.name, code: `${c.schools.length} schools`, schoolCount: c.schools.length, ...r }
+      }).sort((a, b) => b.pct - a.pct)
+      const totals = rows.reduce((acc, r) => ({
+        total: acc.total + r.total, submitted: acc.submitted + r.submitted,
+        present: acc.present + r.present, absent: acc.absent + r.absent,
+      }), { total: 0, submitted: 0, present: 0, absent: 0 })
+      totals.pct = totals.total ? +((totals.submitted / totals.total) * 100).toFixed(1) : 0
+      return { kind: 'clusters', entityNoun: 'Cluster', scope: 'block', scopeLabel: hierFilters.block, rows, totals }
+    }
+    return rawScopeTable
+  }, [rawScopeTable, hierFilters.block, hierFilters.cluster, hierFilters.school, crcImplicitCluster, allBlocks, allClusters, allSchools, subject, grade])
+
+  // Headline = class data (teacher) / school data (others). When a sub-scope
+  // filter is active for DEO/BEO on the participation KPI, recompute the
+  // donut + KPI value from scopeTable so they reflect ONLY the selected
+  // block / cluster / school. For other KPIs we keep the unfiltered headline
+  // (score-rollups per block don't exist yet) — filters still drill the
+  // table and download, which is what the user actually exports.
+  const headlineOverride = (
+    kpiId === 'assessment_participation' &&
+    (hierFilters.block || hierFilters.cluster || hierFilters.school) &&
+    scopeTable?.totals
+  ) ? {
+      ...schoolData,
+      participationPct: scopeTable.totals.pct,
+      participated:     scopeTable.totals.submitted,
+      totalStudents:    scopeTable.totals.total,
+    } : null
+  const headline = headlineOverride || (effective.scope === 'class' ? classData : schoolData)
 
   // Per-subject summary rows for the bar charts (across all subjects in this grade)
   const schoolSubjectRows = useMemo(
-    () => subjects.map(sub => scope === 'class' ? classAssessmentRollup(grade, sub) : schoolAssessmentRollup(sub)).filter(Boolean),
-    [subjects, grade, scope]
+    () => subjects.map(sub => effective.scope === 'class' ? classAssessmentRollup(grade, sub) : schoolAssessmentRollup(sub)).filter(Boolean),
+    [subjects, grade, effective.scope]
   )
 
   // Score band counts for distribution charts (from per-student scores).
@@ -458,12 +617,12 @@ export default function AssessmentDashboardCanvas({ context }) {
     const allSubjects = !!opts.allSubjects
     const subjList = allSubjects ? subjects : [subject]
     const school = {
-      name: profile?.school || 'Sardar Patel Prathmik Shala',
-      udise: profile?.schoolId || '24330411449',
-      district: profile?.district || 'Mehsana',
+      name: effective.profile?.school || profile?.school || 'Sardar Patel Prathmik Shala',
+      udise: effective.profile?.schoolId || profile?.schoolId || '24330411449',
+      district: effective.profile?.district || profile?.district || 'Mehsana',
     }
     openParticipationPdfForScope({
-      scope, role, profile,
+      scope: effective.scope, role, profile: effective.profile,
       grade, subjects: subjList, school,
     })
   }
@@ -490,7 +649,9 @@ export default function AssessmentDashboardCanvas({ context }) {
     // Teacher (class): all 6 subjects of their class — ONE PDF, 6 pages.
     // Principal (school): all 6 subjects of the SELECTED grade — ONE PDF, 6 pages.
     // CRC/BEO/DEO/State: entity rollup for the current subject + grade.
-    if (scope === 'class' || scope === 'school') {
+    // If a sub-scope filter is active, use the drilled-to scope so a DEO
+    // filtering to a single school gets a school PDF, not a district PDF.
+    if (effective.scope === 'class' || effective.scope === 'school') {
       return downloadStudentParticipationReport({ allSubjects: true })
     }
     return downloadScopeParticipationReport()
@@ -599,7 +760,20 @@ export default function AssessmentDashboardCanvas({ context }) {
           </div>
           <div className="flex-1 min-w-0">
             <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              A2 · Assessment & Learning Outcomes · {scope[0].toUpperCase() + scope.slice(1)} level
+              A2 · Assessment & Learning Outcomes · {
+                // Use the actual jurisdiction in the breadcrumb, AND honour
+                // any active hierarchical filter so the breadcrumb reflects
+                // where the user has drilled to.
+                hierFilters.school ? (allSchools.find(s => String(s.schoolid) === String(hierFilters.school))?.name || 'Selected school') :
+                hierFilters.cluster ? `${hierFilters.cluster} cluster` :
+                hierFilters.block ? `${hierFilters.block} block · ${profile?.district || 'District'}` :
+                scope === 'class'    ? `Class ${grade}` :
+                scope === 'school'   ? (profile?.school || 'School level') :
+                scope === 'cluster'  ? `${profile?.cluster || 'Cluster'} cluster` :
+                scope === 'block'    ? `${profile?.block || 'Block'} block` :
+                scope === 'district' ? `${profile?.district || 'District'} district` :
+                scope === 'state'    ? 'Gujarat state' : `${scope} level`
+              }
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0E0E0E', lineHeight: '24px', marginTop: 2 }}>
               {cfg.title} · {headlineValue}{cfg.unit}
@@ -608,23 +782,91 @@ export default function AssessmentDashboardCanvas({ context }) {
               {cfg.sub(headline)} · Target: {cfg.target}{cfg.unit}
             </div>
           </div>
-          {/* Download button — scope-aware (Teacher = all-subject student
-              report; Principal = current class+subject student report;
-              CRC+ = entity rollup). The label changes to reflect that. */}
+          {/* Download button — scope-aware AND KPI-aware.
+              - Teacher / Principal: student-level (per-subject participation
+                or GCERT report cards for Result).
+              - CRC / BEO / DEO / State: entity-level rollup. Schools roll
+                up to clusters → blocks → districts → state. No student
+                report cards at these scopes — that would be nonsensical
+                (a DEO doesn't print 1.5L individual cards from one button). */}
           <button
-            onClick={kpiId === 'assessment_participation' ? downloadCurrentParticipation : (cfg.allowReportCardDownload ? downloadAllReportCards : downloadScopeParticipationReport)}
+            onClick={() => {
+              if (kpiId === 'assessment_participation') return downloadCurrentParticipation()
+              // For Result / Below / Δ / ORF / Reports KPIs:
+              if (effective.scope === 'class' || effective.scope === 'school') {
+                // Class scope (Teacher) or school scope (Principal):
+                // Result + Below allow student GCERT cards. Others fall
+                // through to the data report.
+                if (cfg.allowReportCardDownload) return downloadAllReportCards()
+                return downloadScopeParticipationReport()
+              }
+              // Cluster / block / district / state — always entity rollup.
+              return downloadScopeParticipationReport()
+            }}
             className="active:scale-95 transition-all inline-flex items-center gap-1.5"
             style={{ padding: '6px 12px', borderRadius: 999, background: '#386AF6', color: '#FFFFFF', border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: FONT, flexShrink: 0 }}
           >
             <Download size={13} /> {
               kpiId === 'assessment_participation'
-                ? (scope === 'class' || scope === 'school'
+                ? (effective.scope === 'class' || effective.scope === 'school'
                     ? `All subjects (PDF) · Class ${grade}`
                     : `${scopeTable.entityNoun}-level (PDF)`)
-                : (cfg.allowReportCardDownload ? 'Report cards' : 'Data report')
+                : (effective.scope === 'class' || effective.scope === 'school'
+                    ? (cfg.allowReportCardDownload ? 'Report cards' : 'Data report')
+                    : `${scopeTable.entityNoun}-level report (PDF)`)
             }
           </button>
         </div>
+
+        {/* Block / Cluster / School drill-down filters (DEO + BEO only).
+            Same UX as the Attendance Dashboard — when the user picks an
+            entity, the headline, table AND the download report drill to
+            that selection. */}
+        {(scope === 'district' || scope === 'block' || scope === 'cluster') && (
+          <div className="mt-3 flex items-center gap-2 flex-wrap" style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #D5D8DF', background: '#FAFBFC', fontFamily: FONT }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: '#828996', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Filter</span>
+            {scope === 'district' && (
+              <select
+                value={hierFilters.block}
+                onChange={e => setHierFilters({ block: e.target.value, cluster: '', school: '' })}
+                style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT }}
+              >
+                <option value="">All blocks ({allBlocks.length})</option>
+                {allBlocks.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+              </select>
+            )}
+            {/* Cluster dropdown — hidden for CRC since they're locked to ONE cluster.
+                For DEO it's disabled until a block is picked; for BEO it's always enabled. */}
+            {scope !== 'cluster' && (
+              <select
+                value={hierFilters.cluster}
+                onChange={e => setHierFilters({ ...hierFilters, cluster: e.target.value, school: '' })}
+                disabled={scope === 'district' && !hierFilters.block}
+                style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: (scope === 'district' && !hierFilters.block) ? 0.5 : 1 }}
+              >
+                <option value="">All clusters{allClusters.length ? ` (${allClusters.length})` : ''}</option>
+                {allClusters.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+              </select>
+            )}
+            <select
+              value={hierFilters.school}
+              onChange={e => setHierFilters({ ...hierFilters, school: e.target.value })}
+              disabled={scope !== 'cluster' && !hierFilters.cluster}
+              style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999, border: '1px solid #D5D8DF', background: '#FFFFFF', color: '#0E0E0E', fontFamily: FONT, opacity: (scope !== 'cluster' && !hierFilters.cluster) ? 0.5 : 1 }}
+            >
+              <option value="">All schools{allSchools.length ? ` (${allSchools.length})` : ''}</option>
+              {allSchools.map(s => <option key={s.schoolid} value={s.schoolid}>{s.name}</option>)}
+            </select>
+            {(hierFilters.block || hierFilters.cluster || hierFilters.school) && (
+              <button
+                onClick={() => setHierFilters({ block: '', cluster: '', school: '' })}
+                style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, background: '#FEE2E2', color: '#B91C1C', border: '1px solid #FECACA', cursor: 'pointer', fontFamily: FONT }}
+              >
+                Clear filters ×
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Filter row: Class selector (for Principal+) + Subject tabs */}
         {/* Class selector — locked for Teacher, free for everyone else. */}

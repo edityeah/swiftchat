@@ -327,7 +327,40 @@ export function scopedAssessmentBreakdown(scope, subject) {
 //
 // Synth scopes use a deterministic PRNG keyed on (scope, subject, grade) so
 // numbers stay stable while the user clicks subject / grade pills.
-import { schoolsInCluster, schoolsInBlock, schoolsInDistrict, SCHOOLS, DISTRICTS } from './registries'
+import { schoolsInCluster, schoolsInBlock, schoolsInDistrict, SCHOOLS, DISTRICTS, TEACHERS } from './registries'
+
+// Block names per district. We combine the school sample + teacher sample +
+// pad to match the master district's `blocks` count. So DEO Ahmedabad sees
+// all 11 blocks instead of just the 2 that happen to be in the school
+// sample. Padding names are common Gujarat talukas so the demo doesn't
+// expose "Block 9" placeholders.
+const _COMMON_GUJARAT_TALUKAS = [
+  'AMC', 'MANDAL', 'BAVLA', 'DETROJ-RAMPURA', 'DHANDHUKA', 'DHOLERA',
+  'DHOLKA', 'SANAND', 'VIRAMGAM', 'DASCROI', 'CITY', 'BARWALA',
+  'KADI', 'KHERALU', 'VISNAGAR', 'VIJAPUR', 'UNJHA', 'BECHARAJI',
+  'ANJAR', 'BHACHAU', 'GANDHIDHAM', 'MUNDRA', 'NAKHATRANA', 'RAPAR',
+]
+function blocksForDistrict(districtName) {
+  // Real blocks in scope (from both samples), de-duplicated.
+  const real = new Set()
+  schoolsInDistrict(districtName).forEach(s => { if (s.block) real.add(s.block) })
+  TEACHERS.filter(t => String(t.district).toUpperCase() === String(districtName).toUpperCase()).forEach(t => { if (t.block) real.add(t.block) })
+  const master = DISTRICTS.find(d => String(d.name).toUpperCase() === String(districtName).toUpperCase())
+  const target = master?.blocks || real.size || 1
+  const out = [...real]
+  // Pad with plausible-looking taluka names not already in the list.
+  for (const tk of _COMMON_GUJARAT_TALUKAS) {
+    if (out.length >= target) break
+    if (!out.some(x => x.toUpperCase() === tk.toUpperCase())) out.push(tk)
+  }
+  return out.slice(0, target)
+}
+
+// Exported synth helpers so callers (e.g. AssessmentDashboardCanvas with
+// hierarchical drill-down filters) can build their own scope tables off the
+// same primitives — keeping the number-shape consistent across views.
+export function _assessHash(s) { return _hash(s) }
+export function _assessRollup(seed, total) { return _synthClasswiseRollup(seed, total) }
 
 function _synthClasswiseRollup(seed, total) {
   // Returns { submitted, pct, present, absent }
@@ -453,27 +486,26 @@ export function participationForScope({ scope, role, profile, subject, grade }) 
   // ── District (DEO) ── block-level rows for the district
   if (scope === 'district' || role === 'deo') {
     const distName = profile?.district || 'Ahmedabad'
-    const pool = schoolsInDistrict(distName)
-    const byBlock = new Map()
-    for (const s of pool) {
-      const k = s.block || '—'
-      if (!byBlock.has(k)) byBlock.set(k, [])
-      byBlock.get(k).push(s)
-    }
-    const rows = [...byBlock.entries()].map(([block, schools]) => {
-      const studentsPerGrade = schools.reduce((a, s) => a + Math.max(15, Math.round((s.students || 100) / 8)), 0)
-      const r = _synthClasswiseRollup(_hash(`${block}|${subject}|${grade}`), studentsPerGrade)
+    const blocks = blocksForDistrict(distName)
+    // Master district has N students total — assume even split across blocks
+    // and 1/12th per grade. This makes DEO see ALL blocks (not just the 1-2
+    // that the SCHOOLS sample happens to contain).
+    const master = DISTRICTS.find(d => String(d.name).toUpperCase() === String(distName).toUpperCase())
+    const districtStudents = master?.students || 100_000
+    const studentsPerGrade = Math.round(districtStudents / 12)
+    const perBlockStudents = Math.max(150, Math.round(studentsPerGrade / blocks.length))
+    const rows = blocks.map(block => {
+      const r = _synthClasswiseRollup(_hash(`${block}|${subject}|${grade}|${distName}`), perBlockStudents)
       return {
-        name: block, code: schools[0]?.blockid ? String(schools[0].blockid) : '—',
-        total: studentsPerGrade, submitted: r.submitted, pct: r.pct,
+        name: block, code: '—',
+        total: perBlockStudents, submitted: r.submitted, pct: r.pct,
         present: r.present, absent: r.absent,
-        schoolCount: schools.length,
       }
     })
     rows.sort((a, b) => b.pct - a.pct)
     return {
       kind: 'blocks', entityNoun: 'Block',
-      scope: 'district', scopeLabel: `District ${distName}`,
+      scope: 'district', scopeLabel: `${distName} district`,
       rows,
       totals: _aggregateTotals(rows),
     }
