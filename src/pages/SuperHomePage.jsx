@@ -44,6 +44,13 @@ import {
 } from '../features/askAi/askAiActions'
 import { answerQuery as answerAskAiChart } from '../features/askAi2/queryEngine'
 import ReportCardSection from '../components/kpi/ReportCardSection'
+// Report generation utilities — used by the role-aware "Generate Report"
+// guided wizard (TASK_FLOWS.report_card).
+import { openScopeAttendanceReport, openStudentAttendanceReport } from '../canvas/shared/attendanceReport'
+import { openParticipationPdfForScope } from '../canvas/shared/participationReport'
+import { openBulkStudentReportCards } from '../canvas/shared/studentReportCard'
+import { getDistrictHierarchy, getBlockHierarchy, schoolsForCluster } from '../data/attendanceHierarchy'
+import { titleCase as titleCaseRegistry } from '../data/registries'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -1246,8 +1253,271 @@ const TASK_FLOWS = {
     done: '📊 Performance dashboard ready. Tap the card to explore.',
     build: (ctx) => buildPerformanceArtifact(ctx),
   },
+  // Role-aware "Generate Report" wizard.
+  //
+  // The flow asks the user, conversationally:
+  //   1. Which KPI report? (Attendance / Participation / Result / etc.)
+  //   2. At which level? (depends on role — State sees all five, BEO sees
+  //      Block/Cluster/School/Student, etc.)
+  //   3. If level is below the user's own scope, which specific entity?
+  //      e.g. DEO + Block level → "Which block?" with 11 options.
+  //   4. (Student-level) which class? — so we can route to GCERT cards.
+  //
+  // Then it generates the appropriate PDF via the existing report utilities
+  // (openScopeAttendanceReport / openParticipationPdfForScope / etc.) and
+  // posts a bot message confirming.
   report_card: {
-    triggers: ['report card','report_card','task: report_card','task:report_card','generate report'],
+    triggers: ['report card','report_card','task: report_card','task:report_card','generate report','download report'],
+    steps: (ctx, env) => {
+      const out = []
+      // Step 1: which KPI?
+      out.push({
+        key: 'kpi',
+        prompt: 'Which report would you like to generate?',
+        opts: [
+          'Attendance',
+          'Assessment Participation',
+          'Assessment Result',
+          'Students below benchmark',
+          'Improvement Δ',
+          'ORF / FLN',
+          'Reports downloaded',
+        ],
+      })
+      if (!ctx.kpi) return out
+
+      // Step 2: at which level? Filtered by role hierarchy. The user can
+      // never pick a scope ABOVE their own jurisdiction.
+      const levelOpts = (() => {
+        switch (env.role) {
+          case 'state_secretary': return ['State', 'District', 'Block', 'Cluster', 'School', 'Student']
+          case 'deo':              return ['District', 'Block', 'Cluster', 'School', 'Student']
+          case 'beo':              return ['Block', 'Cluster', 'School', 'Student']
+          case 'crc':              return ['Cluster', 'School', 'Student']
+          case 'principal':        return ['School', 'Student']
+          case 'teacher': case 'parent': return ['Class', 'Student']
+          default: return ['School']
+        }
+      })()
+      out.push({
+        key: 'level',
+        prompt: `For ${ctx.kpi}, at which level do you want the report?`,
+        opts: levelOpts,
+      })
+      if (!ctx.level) return out
+
+      // Step 3: pick the specific entity if drilling below user's scope.
+      // We only ask when the choice is meaningful — e.g. DEO + level='Block'
+      // → which block? But DEO + level='District' → no entity choice (their
+      // own district).
+      const needsBlock = (env.role === 'deo' || env.role === 'state_secretary') &&
+        ['Block', 'Cluster', 'School', 'Student'].includes(ctx.level)
+      const needsDistrict = env.role === 'state_secretary' &&
+        ['District', 'Block', 'Cluster', 'School', 'Student'].includes(ctx.level)
+      const needsCluster = (env.role === 'deo' || env.role === 'beo' || env.role === 'state_secretary') &&
+        ['Cluster', 'School', 'Student'].includes(ctx.level)
+      const needsSchool = ['School', 'Student'].includes(ctx.level) && env.role !== 'principal' && env.role !== 'teacher' && env.role !== 'parent'
+
+      if (needsDistrict) {
+        out.push({
+          key: 'district',
+          prompt: 'Which district?',
+          opts: (env._districts || ['Ahmedabad', 'Surat', 'Mehsana', 'Kachchh', 'Rajkot', 'Vadodara', 'Anand', 'Banaskantha']),
+        })
+        if (!ctx.district) return out
+      }
+      if (needsBlock) {
+        const districtName = ctx.district || env.district || 'Ahmedabad'
+        const districtH = getDistrictHierarchy(districtName, 'today')
+        out.push({
+          key: 'block',
+          prompt: `Which block in ${districtName}?`,
+          opts: districtH.blocks.map(b => b.name),
+        })
+        if (!ctx.block) return out
+      }
+      if (needsCluster) {
+        let clusters = []
+        if (env.role === 'beo' && !ctx.block) {
+          const blockH = getBlockHierarchy(env.block || 'Mehsana', 'today')
+          clusters = blockH.clusters.map(c => c.name)
+        } else {
+          const districtName = ctx.district || env.district || 'Ahmedabad'
+          const districtH = getDistrictHierarchy(districtName, 'today')
+          const block = districtH.blocks.find(b => b.name === ctx.block) || districtH.blocks[0]
+          clusters = block.clusters.map(c => c.name)
+        }
+        out.push({
+          key: 'cluster',
+          prompt: `Which cluster${ctx.block ? ` in ${ctx.block}` : ''}?`,
+          opts: clusters,
+        })
+        if (!ctx.cluster) return out
+      }
+      if (needsSchool) {
+        const schools = schoolsForCluster(ctx.cluster || env.cluster || 'MADHAPAR', ctx.block || env.block)
+          .map(s => ({ id: s.schoolid, name: s.school }))
+        out.push({
+          key: 'school',
+          prompt: `Which school${ctx.cluster ? ` in ${ctx.cluster}` : ''}?`,
+          opts: schools.map(s => s.name),
+        })
+        if (!ctx.school) return out
+      }
+      // Student-level adds one more "Which class?" question so we know which
+      // STUDENTS[] cohort to render report cards for.
+      if (ctx.level === 'Student') {
+        out.push({
+          key: 'grade',
+          prompt: 'Which class?',
+          opts: ['Class 6', 'Class 7', 'Class 8', 'All classes'],
+        })
+        if (!ctx.grade) return out
+      }
+      return out
+    },
+    progress: ['Pulling data from VSK…', 'Building the PDF…', 'Opening print dialog…'],
+    customComplete: (ctx, env) => {
+      // Generate the appropriate PDF based on (KPI × level × entity).
+      // Confirms in chat with a short message + a [Download] action.
+      const { addBot, role, profile } = env
+      const district = ctx.district || env.district || profile?.district || 'Ahmedabad'
+      const block    = ctx.block    || env.block    || profile?.block
+      const cluster  = ctx.cluster  || env.cluster  || profile?.cluster
+      const school   = ctx.school   || env.school   || profile?.school
+      const today = new Date()
+      const dateFrom = new Date(today); dateFrom.setDate(today.getDate() - 6)
+
+      // Resolve effective scope from level → registry scope.
+      const scope = ({ State: 'state', District: 'district', Block: 'block', Cluster: 'cluster', School: 'school', Class: 'class', Student: 'class' })[ctx.level] || 'district'
+      const scopeLabel =
+        ctx.level === 'State'    ? 'Gujarat' :
+        ctx.level === 'District' ? titleCaseRegistry(district) :
+        ctx.level === 'Block'    ? `${block} block` :
+        ctx.level === 'Cluster'  ? `${cluster} cluster` :
+        ctx.level === 'School'   ? school :
+        ctx.level === 'Student'  ? `${school || cluster || district} · ${ctx.grade || 'Class 6'}` :
+        ctx.level
+
+      try {
+        // ── Attendance KPI ─────────────────────────────────────────────────
+        if (ctx.kpi === 'Attendance') {
+          if (scope === 'class' || ctx.level === 'Student') {
+            const grade = Number((ctx.grade || 'Class 6').replace(/\D/g, '')) || 6
+            const students = (STUDENTS[grade] || []).map(s => ({
+              name: s.name, ssmid: s.id, working: 6,
+              present: Math.round(6 * (s.attendance || 70) / 100),
+              absent:  6 - Math.round(6 * (s.attendance || 70) / 100),
+              pct: s.attendance || 70, risk: s.risk, ews: s.ewsFlag,
+            }))
+            openStudentAttendanceReport({
+              title: 'Student Attendance Report · Last 7 days',
+              scopeLabel, schoolName: school || 'School',
+              dateFrom, dateTo: today, rows: students,
+            })
+          } else {
+            // Build an entity-rollup PDF — pick the entity-noun by level.
+            const entityNoun =
+              ctx.level === 'State'    ? 'District' :
+              ctx.level === 'District' ? 'Block' :
+              ctx.level === 'Block'    ? 'Cluster' :
+              ctx.level === 'Cluster'  ? 'School' :
+              'School'
+            // Pull a plausible row list from the relevant hierarchy.
+            let rows = []
+            if (ctx.level === 'State' || ctx.level === 'District') {
+              const districtH = getDistrictHierarchy(district, 'today')
+              const items = ctx.level === 'State' ? [{ name: 'Gujarat', metrics: districtH.totals }] : districtH.blocks
+              rows = items.map(it => ({
+                entity: it.name, code: '—',
+                totalStudents: it.metrics.total,
+                submitted: 1, total: 1,
+                present: it.metrics.present, absent: it.metrics.absent, pct: it.metrics.pct,
+              }))
+            } else if (ctx.level === 'Block') {
+              const districtH = getDistrictHierarchy(district, 'today')
+              const b = districtH.blocks.find(x => x.name === block)
+              rows = (b?.clusters || []).map(c => ({
+                entity: c.name, code: `${c.schools.length} schools`,
+                totalStudents: c.metrics.total,
+                submitted: c.schools.length, total: c.schools.length,
+                present: c.metrics.present, absent: c.metrics.absent, pct: c.metrics.pct,
+              }))
+            } else if (ctx.level === 'Cluster') {
+              const districtH = block ? getDistrictHierarchy(district, 'today') : null
+              const c = districtH?.blocks.flatMap(x => x.clusters).find(x => x.name === cluster)
+              rows = (c?.schools || []).map(s => ({
+                entity: s.name, code: String(s.schoolid),
+                totalStudents: s.metrics.total,
+                submitted: 1, total: 1,
+                present: s.metrics.present, absent: s.metrics.absent, pct: s.metrics.pct,
+              }))
+            } else if (ctx.level === 'School') {
+              // Single-row school summary
+              rows = [{ entity: school || 'School', code: '—', totalStudents: 100, submitted: 1, total: 1, present: 90, absent: 10, pct: 90 }]
+            }
+            openScopeAttendanceReport({
+              title: `${entityNoun} Attendance Report · Last 7 days`,
+              scopeLabel,
+              scopeFilter: `${ctx.level} · ${scopeLabel}`,
+              entityNoun,
+              dateFrom, dateTo: today, rows,
+            })
+          }
+        }
+        // ── Assessment Participation / Result / etc. ──────────────────────
+        else {
+          // Map UI label → kpiId used by AssessmentDashboardCanvas / participation report.
+          const kpiId = ({
+            'Assessment Participation': 'assessment_participation',
+            'Assessment Result':         'proficiency',
+            'Students below benchmark':  'students_below_proficiency',
+            'Improvement Δ':             'student_improvement_delta',
+            'ORF / FLN':                 'orf_fln_improvement',
+            'Reports downloaded':        'reports_generated_downloaded',
+          })[ctx.kpi]
+
+          if (ctx.level === 'Student') {
+            // Student → bulk GCERT report cards for the class.
+            const grade = Number((ctx.grade || 'Class 6').replace(/\D/g, '')) || 6
+            openBulkStudentReportCards({
+              students: (STUDENTS[grade] || []).slice(0, 20).map(s => ({ ...s, grade })),
+              school: {
+                name: school || 'Sardar Patel Prathmik Shala',
+                udise: '24330411449',
+                district, block, cluster, subjectTeacher: 'Vyas Payalben Arvindkumar',
+              },
+              subjectsFilter: ['Gujarati 1st Lang', 'Maths', 'Science', 'Social Science', 'English 2nd Lang', 'Hindi 2nd Lang'],
+            })
+          } else {
+            // Entity-level participation/result PDF — multi-page, one per subject.
+            openParticipationPdfForScope({
+              scope, role,
+              profile: { ...profile, district, block, cluster, school },
+              grade: 6,
+              subjects: ['Gujarati 1st Lang', 'Maths', 'Science', 'Social Science', 'English 2nd Lang', 'Hindi 2nd Lang'],
+              school: {
+                name: school || 'Sardar Patel Prathmik Shala',
+                udise: '24330411449',
+                district,
+              },
+              kpiId,
+            })
+          }
+        }
+        addBot(
+          `📄 ${ctx.kpi} report for **${scopeLabel}** is opening in a new tab. Use your browser's **Save as PDF** in the print dialog.`,
+          ['Generate another report', 'Go to dashboard']
+        )
+      } catch (err) {
+        addBot(`Couldn't generate the report — ${err?.message || 'unknown error'}. Try again, or pick a different level.`, ['Generate another report'])
+      }
+    },
+  },
+  // Legacy report_card flow kept under a different id for any direct callers
+  // that still expect the student-only behavior.
+  _legacy_report_card: {
+    triggers: ['legacy report card'],
     steps: [
       { key:'grade',   prompt:'Which grade?',   opts:['3','5','6','8'] },
       { key:'student', prompt:'Which student?', opts:['All Students','Ravi Parmar','Komal Patel','Ananya Pandya'] },
@@ -2933,14 +3203,25 @@ export default function SuperHomePage() {
     // ── Mid-collection flow ──────────────────────────────────────────────
     if (collectState) {
       const flow  = TASK_FLOWS[collectState.taskId]
-      const step  = flow.steps[collectState.stepIdx]
+      // Support dynamic steps: `flow.steps` may be a function (ctx, env) =>
+      // Array<step>. Re-evaluate it each turn so a branching report-card flow
+      // can add follow-up questions based on prior answers.
+      const env = { role, profile: userProfile, district: userProfile?.district, block: userProfile?.block, cluster: userProfile?.cluster, school: userProfile?.school }
+      const stepsBefore = typeof flow.steps === 'function' ? flow.steps(collectState.ctx, env) : flow.steps
+      const step  = stepsBefore[collectState.stepIdx]
       const newCtx = { ...collectState.ctx, [step.key]: text }
       const nextStep = collectState.stepIdx + 1
+      const stepsAfter = typeof flow.steps === 'function' ? flow.steps(newCtx, env) : flow.steps
 
-      if (nextStep < flow.steps.length) {
-        const next = flow.steps[nextStep]
+      if (nextStep < stepsAfter.length) {
+        const next = stepsAfter[nextStep]
         setCollect({ taskId: collectState.taskId, stepIdx: nextStep, ctx: newCtx })
         addBot(next.prompt, next.opts || [])
+      } else if (typeof flow.customComplete === 'function') {
+        // Custom completion path — flow handles its own PDF generation,
+        // message rendering, etc. We just clear the collect state.
+        setCollect(null)
+        flow.customComplete(newCtx, { ...env, addBot, openCanvas })
       } else {
         setCollect(null)
         if (typeof flow.openCanvasOnComplete === 'function') {
@@ -2984,8 +3265,12 @@ export default function SuperHomePage() {
     const taskId = detectTask(text)
     if (taskId) {
       const flow = TASK_FLOWS[taskId]
-      if (flow.steps.length === 0) {
-        if (flow.inline && flow.buildInline) {
+      const env = { role, profile: userProfile, district: userProfile?.district, block: userProfile?.block, cluster: userProfile?.cluster, school: userProfile?.school }
+      const initialSteps = typeof flow.steps === 'function' ? flow.steps({}, env) : flow.steps
+      if (!initialSteps || initialSteps.length === 0) {
+        if (typeof flow.customComplete === 'function') {
+          flow.customComplete({}, { ...env, addBot, openCanvas })
+        } else if (flow.inline && flow.buildInline) {
           const html = flow.buildInline({})
           const doneText = typeof flow.done === 'function' ? flow.done({}) : flow.done
           addBot(doneText, [], { html, actions: flow.actions, progress: flow.progress })
@@ -2999,7 +3284,7 @@ export default function SuperHomePage() {
         }
       } else {
         setCollect({ taskId, stepIdx: 0, ctx: {} })
-        const first = flow.steps[0]
+        const first = initialSteps[0]
         addBot(first.prompt, first.opts || [])
       }
       return
