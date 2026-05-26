@@ -159,7 +159,7 @@ function pageHtml({ subject, grade, scopeLabel, school, rows }) {
   <table class="students">
     <thead><tr>
       <th>Student name</th>
-      <th>SSMID</th>
+      <th>Student ID</th>
       <th class="c">Appeared</th>
       <th class="r">Score</th>
       <th class="r">Δ vs prev</th>

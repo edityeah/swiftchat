@@ -113,7 +113,7 @@ function StudentAttendanceCard({ card, onOpenStudent }) {
           <div style={{ fontSize: 13, fontWeight: 700, color: '#0E0E0E' }}>{card.name}</div>
           {card.ssmid && (
             <div style={{ fontSize: 10.5, color: '#7383A5', marginTop: 1, fontFamily: 'ui-monospace, monospace' }}>
-              SSMID · {card.ssmid}
+              Student ID · {card.ssmid}
             </div>
           )}
         </div>

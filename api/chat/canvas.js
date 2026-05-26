@@ -99,7 +99,7 @@ rich visual cards inside the chat bubble):
 RULES:
 - "reply" is a short conversational intro. The CARDS carry the detail. If you
   emit student_attendance cards, do NOT also list the same names in "reply".
-- USE ONLY DATA FROM THE BLOCK ABOVE. Never invent names, SSMIDs, percentages,
+- USE ONLY DATA FROM THE BLOCK ABOVE. Never invent names, Student IDs, percentages,
   or risk flags. If the data lacks a field, leave it out of the card.
 - When the user asks "who is absent today?" → emit one student_attendance card
   per absent student from data.absentList. Compute "pattern" from the

@@ -92,7 +92,7 @@ export function openStudentAttendanceReport({
   <table>
     <thead><tr>
       <th style="text-align:left;padding-left:10px">Name</th>
-      <th>SSMID</th>
+      <th>Student ID</th>
       <th>Working days</th>
       <th>Present</th>
       <th>Absent</th>
@@ -119,7 +119,7 @@ export function openStudentAttendanceReport({
       <td>—</td>
     </tr></tfoot>
   </table>
-  <div class="note">Risk = composite of attendance + EWS flag. SSMID is the 18-digit Gujarat Student Master ID. All data synthesised for prototype.</div>
+  <div class="note">Risk = composite of attendance + EWS flag. Student ID is the 18-digit Gujarat student tracking number. All data synthesised for prototype.</div>
   <div class="footer">
     <span>Vidya Samiksha Kendra · Gujarat Council of School Education</span>
     <span>Generated ${new Date().toLocaleString('en-IN')}</span>
@@ -311,7 +311,7 @@ export function openScopeAttendanceReport({
 
 // CSV download — same row schema as the student report.
 export function downloadStudentAttendanceCsv({ rows, scopeLabel = 'class', dateFrom, dateTo }) {
-  const header = ['Name', 'SSMID', 'Working days', 'Present', 'Absent', 'Attendance %', 'Risk']
+  const header = ['Name', 'Student ID', 'Working days', 'Present', 'Absent', 'Attendance %', 'Risk']
   const lines = [header.join(',')]
   for (const r of rows) {
     lines.push([

@@ -239,7 +239,7 @@ export default function StudentProfileCanvas({ context }) {
               {student.name}
             </h2>
             <div style={{ fontSize: 12.5, color: '#7383A5', marginTop: 2, fontFamily: 'ui-monospace, monospace' }}>
-              SSMID · {student.id}
+              Student ID · {student.id}
             </div>
             <div style={{ fontSize: 12, color: '#7383A5', marginTop: 1 }}>
               GR No. {student.grNo} · {profile?.school || 'Sardar Patel Prathmik Shala'}

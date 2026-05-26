@@ -237,7 +237,12 @@ function RangeTabs({ range, setRange, onDownload }) {
       </div>
       {onDownload && range === '30d' && (
         <button
-          onClick={onDownload}
+          // IMPORTANT: wrap in an arrow fn so React's synthetic event isn't
+          // passed as the first arg to downloadCurrentReport(). When it was
+          // wired directly (`onClick={onDownload}`), the truthy event object
+          // hit the `windowOverride` slot and short-circuited the 30d path,
+          // making the report come out as 7 days even from the 30d tab.
+          onClick={() => onDownload()}
           className="active:scale-95 transition-all"
           style={{
             fontSize: 11.5, fontWeight: 700,
@@ -288,7 +293,7 @@ function ClassScopeView30d({ profile, data, onAsk, onOpenStudent }) {
           <thead>
             <tr style={{ background: '#FAFBFC' }}>
               <th style={{ textAlign: 'left',  padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Name</th>
-              <th style={{ textAlign: 'left',  padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>SSMID</th>
+              <th style={{ textAlign: 'left',  padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Student ID</th>
               <th style={{ textAlign: 'right', padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Present</th>
               <th style={{ textAlign: 'right', padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Absent</th>
               <th style={{ textAlign: 'right', padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Att %</th>
@@ -368,7 +373,7 @@ function ClassScopeViewBody({ profile, data, onAsk, onOpenStudent }) {
             <thead>
               <tr style={{ background: '#FAFBFC' }}>
                 <th style={{ textAlign: 'left',  padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Name</th>
-                <th style={{ textAlign: 'left',  padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>SSMID</th>
+                <th style={{ textAlign: 'left',  padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Student ID</th>
                 <th style={{ textAlign: 'right', padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Term att.</th>
                 <th style={{ textAlign: 'left',  padding: '8px 12px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Risk</th>
                 <th style={{ padding: '8px 12px' }}></th>
@@ -954,7 +959,11 @@ export default function AttendanceDashboardCanvas({ context }) {
   // "download last week" while sitting on the Today tab).
   function downloadCurrentReport(windowOverride) {
     const today = new Date()
-    const isThirty = windowOverride ? windowOverride === '30d' : range === '30d'
+    // Only honour windowOverride when it's an explicit '7d' / '30d' STRING.
+    // Anything else (e.g. a React SyntheticEvent accidentally passed by a
+    // bare `onClick={onDownload}`) is ignored — fall back to the active tab.
+    const override = (windowOverride === '7d' || windowOverride === '30d') ? windowOverride : null
+    const isThirty = override ? override === '30d' : range === '30d'
     const days = isThirty ? 30 : 7
     const dateFrom = new Date(today); dateFrom.setDate(today.getDate() - (days - 1))
     const windowLabel = isThirty ? '30 days' : '7 days'

@@ -693,7 +693,7 @@ export default function AssessmentDashboardCanvas({ context }) {
               <thead>
                 <tr style={{ background: '#FAFBFC' }}>
                   <th style={{ textAlign: 'left',  padding: '8px 10px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Name</th>
-                  <th style={{ textAlign: 'left',  padding: '8px 10px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>SSMID</th>
+                  <th style={{ textAlign: 'left',  padding: '8px 10px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Student ID</th>
                   <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Appeared</th>
                   <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Score</th>
                   <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10, color: '#828996', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Δ</th>
