@@ -278,7 +278,7 @@ function ClassScopeView30d({ profile, data, onAsk, onOpenStudent }) {
         <InteractiveTrendChart values={trendValues} unit="%" status={monthlyAvgPct >= 80 ? 'green' : monthlyAvgPct >= 60 ? 'yellow' : 'red'} />
       </ChartCard>
 
-      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'hidden' }}>
+      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'auto hidden' }}>
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #D5D8DF', background: '#FAFBFC' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             Per-student 30-day summary · {sorted.length} students
@@ -355,7 +355,7 @@ function ClassScopeViewBody({ profile, data, onAsk, onOpenStudent }) {
         />
       </ChartCard>
 
-      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'hidden' }}>
+      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'auto hidden' }}>
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #D5D8DF', background: '#FAFBFC' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             Today's absentees · {absentList.length}
@@ -449,7 +449,7 @@ function SchoolScopeView30d({ data, onAsk }) {
         </ChartCard>
       </div>
 
-      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'hidden' }}>
+      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'auto hidden' }}>
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #D5D8DF', background: '#FAFBFC' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             Class-by-class · 30-day summary
@@ -531,7 +531,7 @@ function SchoolScopeView({ profile, data, onAsk }) {
         </ChartCard>
       </div>
 
-      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'hidden' }}>
+      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'auto hidden' }}>
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #D5D8DF', background: '#FAFBFC' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             Class-by-class breakdown
@@ -616,7 +616,7 @@ function ScopedSchoolsView({ scope, scopeLabel, scopedSchools, totals, topRows, 
         </ChartCard>
       </div>
 
-      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'hidden' }}>
+      <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'auto hidden' }}>
         <div style={{ padding: '10px 12px', borderBottom: '1px solid #D5D8DF', background: '#FAFBFC' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             Schools — {scopedSchools.length} shown

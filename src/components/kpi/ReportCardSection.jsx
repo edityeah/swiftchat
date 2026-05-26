@@ -36,11 +36,22 @@ export default function ReportCardSection() {
 
   const totalCount = getCatalogForRole(role).length
 
-  // KPIs that get the richer dashboard canvas instead of the generic
-  // KPI-insight canvas (charts + chips + chat).
+  // KPIs that get a dedicated rich-dashboard canvas instead of the generic
+  // KPI-insight canvas. Keep these sets in lock-step with the equivalent
+  // sets in canvas/modules/ReportCardCanvas.jsx.
   const ATTENDANCE_KPIS = new Set([
     'attendance_today',
     'attendance_reporting_compliance',
+  ])
+  // All six A2 KPIs route to the new AssessmentDashboardCanvas with the
+  // kpiId in context so the canvas can pick the right sub-view.
+  const ASSESSMENT_KPIS = new Set([
+    'assessment_participation',
+    'proficiency',
+    'students_below_proficiency',
+    'student_improvement_delta',
+    'orf_fln_improvement',
+    'reports_generated_downloaded',
   ])
 
   function openKpiDrilldown(computed) {
@@ -65,6 +76,10 @@ export default function ReportCardSection() {
         grade:    profile?.classes?.[0] || 6,
         kpiId: id,
       })
+      return
+    }
+    if (ASSESSMENT_KPIS.has(id)) {
+      openCanvas({ type: 'assessment-dashboard', kpiId: id })
       return
     }
     openCanvas({ type: 'kpi_insight', kpiId: id })

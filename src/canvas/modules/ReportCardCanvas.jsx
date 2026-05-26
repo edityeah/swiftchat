@@ -30,11 +30,20 @@ export default function ReportCardCanvas() {
     return acc
   }, {})
 
-  // Attendance-flavoured KPIs land on the rich attendance dashboard. Other
-  // KPIs go to the generic insight canvas.
+  // Attendance-flavoured KPIs → rich attendance dashboard.
+  // Assessment-flavoured KPIs (all six A2 KPIs) → AssessmentDashboardCanvas.
+  // Everything else → generic KPI insight canvas.
   const ATTENDANCE_KPIS = new Set([
     'attendance_today',
     'attendance_reporting_compliance',
+  ])
+  const ASSESSMENT_KPIS = new Set([
+    'assessment_participation',
+    'proficiency',
+    'students_below_proficiency',
+    'student_improvement_delta',
+    'orf_fln_improvement',
+    'reports_generated_downloaded',
   ])
 
   function open(computed) {
@@ -59,6 +68,10 @@ export default function ReportCardCanvas() {
         grade:    profile?.classes?.[0] || 6,
         kpiId: id,
       })
+      return
+    }
+    if (ASSESSMENT_KPIS.has(id)) {
+      openCanvas({ type: 'assessment-dashboard', kpiId: id })
       return
     }
     openCanvas({ type: 'kpi_insight', kpiId: id })

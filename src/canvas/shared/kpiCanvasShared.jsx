@@ -270,9 +270,13 @@ export function CardStack({ cards, onOpenStudent }) {
 // Wraps any chart with a consistent header + Ask-AI button (KSK style).
 // `onAsk(prompt)` should pre-fill the canvas chat input (don't auto-send) so
 // the user can edit the prompt before pressing return.
+//
+// The content area has `overflow-x: auto` so wide tables scroll horizontally
+// instead of breaking out of the card (and the canvas). SVG charts use
+// width="100%" so they don't trigger the scroll.
 export function ChartCard({ title, askPrompt, onAsk, children, style }) {
   return (
-    <div className="mt-4" style={{ borderRadius: 12, border: '1px solid #D5D8DF', padding: 12, background: '#FFFFFF', ...style }}>
+    <div className="mt-4" style={{ borderRadius: 12, border: '1px solid #D5D8DF', padding: 12, background: '#FFFFFF', minWidth: 0, ...style }}>
       <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
           {title}
@@ -286,14 +290,16 @@ export function ChartCard({ title, askPrompt, onAsk, children, style }) {
               fontSize: 10.5, fontWeight: 700,
               padding: '3px 8px', borderRadius: 999,
               border: '1px solid #C7D2FE', background: '#EEF2FF', color: '#3730A3',
-              cursor: 'pointer', fontFamily: FONT, letterSpacing: '0.02em',
+              cursor: 'pointer', fontFamily: FONT, letterSpacing: '0.02em', flexShrink: 0,
             }}
           >
             <Sparkles size={11} /> Ask AI
           </button>
         )}
       </div>
-      {children}
+      <div style={{ overflowX: 'auto', overflowY: 'hidden', maxWidth: '100%' }}>
+        {children}
+      </div>
     </div>
   )
 }

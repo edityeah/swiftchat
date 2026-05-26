@@ -263,7 +263,7 @@ export default function EntityRegistryCanvas({ context }) {
         </h2>
 
         {/* Top stats strip */}
-        <div className="mt-4 flex" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'hidden' }}>
+        <div className="mt-4 flex" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'auto hidden' }}>
           <HeaderStat label="Schools"  value={Number(agg.schools  ?? 0).toLocaleString()} />
           <HeaderStat label="Teachers" value={Number(agg.teachers ?? 0).toLocaleString()} />
           <HeaderStat label="Students" value={compactNumber(agg.students)} />
@@ -299,7 +299,7 @@ export default function EntityRegistryCanvas({ context }) {
         </div>
 
         {/* Table */}
-        <div className="mt-3" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'hidden' }}>
+        <div className="mt-3" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'auto hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
             <thead>
               <tr style={{ background: '#FAFBFC', borderBottom: '1px solid #D5D8DF' }}>

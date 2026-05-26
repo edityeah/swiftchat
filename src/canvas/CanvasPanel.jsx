@@ -24,6 +24,7 @@ import StudentProfileCanvas from './modules/StudentProfileCanvas'
 import TeacherProfileCanvas from './modules/TeacherProfileCanvas'
 import SchoolProfileCanvas  from './modules/SchoolProfileCanvas'
 import SchoolsAtRiskCanvas  from './modules/SchoolsAtRiskCanvas'
+import AssessmentDashboardCanvas from './modules/AssessmentDashboardCanvas'
 // Legacy canvas tabs (fallback for old chatId-based canvas)
 import RichTextEditor    from './RichTextEditor'
 import DataForm          from './DataForm'
@@ -65,6 +66,17 @@ const MODULE_META = {
   'teacher-profile': { icon: '👩‍🏫', title: ctx => ctx.teacherName ? `Teacher · ${ctx.teacherName}` : 'Teacher profile' },
   'school-profile':  { icon: '🏫', title: ctx => ctx.schoolName  ? `School · ${ctx.schoolName}`   : 'School profile' },
   'schools-at-risk': { icon: '🏫', title: ctx => ctx.filter === 'low_performing_schools' ? 'Low-performing schools' : 'Schools below benchmark' },
+  'assessment-dashboard': { icon: '📝', title: ctx => {
+    const t = {
+      assessment_participation: 'Assessment · Participation',
+      proficiency: 'Assessment · Result',
+      students_below_proficiency: 'Assessment · Below threshold',
+      student_improvement_delta: 'Assessment · Improvement Δ',
+      orf_fln_improvement: 'Assessment · ORF / FLN',
+      reports_generated_downloaded: 'Assessment · Reports downloaded',
+    }
+    return t[ctx?.kpiId] || 'Assessment dashboard'
+  } },
   digivritti:  { icon: '🌸', title: ctx => {
     const scheme = ctx.scheme && ctx.scheme !== 'all' ? ` — ${SCHEME_TITLE[ctx.scheme] || ctx.scheme}` : ''
     if (ctx.view === 'apply')          return `DigiVritti${scheme} · New Application`
@@ -238,6 +250,7 @@ export default function CanvasPanel() {
               {ctx.type === 'teacher-profile' && <TeacherProfileCanvas context={ctx} />}
               {ctx.type === 'school-profile'  && <SchoolProfileCanvas  context={ctx} />}
               {ctx.type === 'schools-at-risk' && <SchoolsAtRiskCanvas  context={ctx} />}
+              {ctx.type === 'assessment-dashboard' && <AssessmentDashboardCanvas context={ctx} />}
             </>
           ) : (
             <>

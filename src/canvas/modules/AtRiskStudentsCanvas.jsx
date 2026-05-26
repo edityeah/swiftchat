@@ -316,7 +316,7 @@ export default function AtRiskStudentsCanvas({ context }) {
 
         {/* Student list */}
         {students.length > 0 && (
-          <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'hidden' }}>
+          <div className="mt-4" style={{ border: '1px solid #D5D8DF', borderRadius: 12, overflow: 'auto hidden' }}>
             <div style={{ padding: '10px 12px', borderBottom: '1px solid #D5D8DF', background: '#FAFBFC' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                 Students {tierFilter ? `· ${tierFilter}` : ''} · showing {Math.min(students.length, 50)} of {students.length}

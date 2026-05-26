@@ -7,7 +7,8 @@
 //   For CSV the user already gets a downloadable file from /api/export
 //   (kept simple — a Blob URL).
 
-const VSK_LOGO = '🏛️'   // placeholder; the real logo is on the home shell
+import { VSK_LOGO_SVG } from './vskLogo'
+const VSK_LOGO = VSK_LOGO_SVG
 
 function fmtDate(d) {
   if (!d) return ''
@@ -33,7 +34,8 @@ const CSS = `
 * { box-sizing: border-box; }
 body { font-family: 'Montserrat', system-ui, sans-serif; color: #0E0E0E; margin: 0; padding: 24px; background: #FFFFFF; }
 .header { display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 3px solid #386AF6; padding-bottom: 10px; margin-bottom: 14px; }
-.header .crest { font-size: 30px; line-height: 1; }
+.header .crest { width: 64px; height: auto; line-height: 0; flex-shrink: 0; }
+.header .crest svg { width: 64px; height: auto; display: block; }
 .header h1 { margin: 0; font-size: 22px; color: #F59E0B; font-weight: 800; text-align: center; }
 .header .sub { font-size: 11px; color: #828996; text-align: right; letter-spacing: 0.04em; }
 .filters { display: flex; gap: 24px; margin-bottom: 12px; font-size: 12px; color: #0E0E0E; }
