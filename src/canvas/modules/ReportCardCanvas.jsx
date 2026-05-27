@@ -6,15 +6,21 @@ import KpiTile from '../../components/kpi/KpiTile'
 const FONT = 'Montserrat, sans-serif'
 
 const FRAMEWORK_TITLES = {
-  A1: 'A1 · Attendance & Access',
-  A2: 'A2 · Assessment & Learning Outcomes',
-  A3: 'A3 · Adaptive Learning & Remediation',
-  A4: 'A4 · Administration & Service Delivery',
-  A5: 'A5 · Accreditation & School Quality',
-  A6: 'A6 · Governance, Monitoring & AI Efficiency',
-  District: 'District Level Tracking',
+  A1: 'Attendance',
+  A2: 'Assessment',
+  A5: 'Accreditation',
+  // Legacy frameworks kept for back-compat. They're filtered out by the
+  // catalog visibility list — these labels would only render if a future
+  // KPI gets added back into the visible set.
+  A3: 'Adaptive Learning',
+  A4: 'Administration',
+  A6: 'Governance',
+  District: 'District',
   Parent: 'Your child',
 }
+
+// Render order — Attendance → Assessment → Accreditation, top to bottom.
+const FRAMEWORK_ORDER = ['A1', 'A2', 'A5', 'Parent', 'District', 'A3', 'A4', 'A6']
 
 export default function ReportCardCanvas() {
   const { role, userProfile, openCanvas } = useApp()
@@ -106,8 +112,9 @@ export default function ReportCardCanvas() {
           </div>
         </div>
 
-        {/* Per-framework groups */}
-        {Object.entries(byFramework).map(([fw, list]) => (
+        {/* Per-framework groups — rendered in fixed order so Attendance
+            always sits above Assessment above Accreditation. */}
+        {FRAMEWORK_ORDER.filter(fw => byFramework[fw]).map(fw => [fw, byFramework[fw]]).map(([fw, list]) => (
           <section key={fw} className="mt-5">
             <h3 style={{ fontSize: 11, fontWeight: 700, color: '#828996', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10, fontFamily: FONT }}>
               {FRAMEWORK_TITLES[fw] || fw}

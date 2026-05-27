@@ -593,6 +593,71 @@ export const KPI_CATALOG = [
   },
 ]
 
+// ─── Visibility filter ────────────────────────────────────────────────────
+// Product decision (May 2026): home page + report card only show KPIs in
+// three buckets — Attendance, Assessment, Accreditation. Everything else
+// (Adaptive Learning A3, Admin A4, Governance A6, District-level tracking,
+// scholarship-only parent KPIs) is hidden from the role-facing surfaces.
+// The underlying KPI_CATALOG keeps the full entries for back-compat with
+// canvases that may still reference them by id, but `getCatalogForRole`
+// filters down to the visible set.
+const VISIBLE_KPI_IDS = new Set([
+  // A1 · Attendance
+  'attendance_today',
+  'chronic_absentees',
+  'schools_below_attendance_benchmark',
+  'attendance_reporting_compliance',
+  // A2 · Assessment
+  'assessment_participation',
+  'proficiency',
+  'students_below_proficiency',
+  'student_improvement_delta',
+  'orf_fln_improvement',
+  'reports_generated_downloaded',
+  // A5 · Accreditation
+  'gsqac_score',
+  'schools_meeting_quality_benchmark',
+  'low_performing_schools',
+  'gsqac_improvement_cycles',
+  'improvement_actions_completed',
+  // Parent — only attendance + assessment equivalents
+  'child_attendance',
+  'child_chronic_absence_flag',
+  'child_proficiency',
+])
+
+// Category bucketing for the 3-tile home view + grouped Report Card canvas.
+// One bucket per row: attendance / assessment / accreditation.
+const KPI_CATEGORIES = {
+  attendance: new Set([
+    'attendance_today', 'chronic_absentees', 'schools_below_attendance_benchmark',
+    'attendance_reporting_compliance', 'child_attendance', 'child_chronic_absence_flag',
+  ]),
+  assessment: new Set([
+    'assessment_participation', 'proficiency', 'students_below_proficiency',
+    'student_improvement_delta', 'orf_fln_improvement', 'reports_generated_downloaded',
+    'child_proficiency',
+  ]),
+  accreditation: new Set([
+    'gsqac_score', 'schools_meeting_quality_benchmark', 'low_performing_schools',
+    'gsqac_improvement_cycles', 'improvement_actions_completed',
+  ]),
+}
+
+export function kpiCategory(kpiId) {
+  for (const [cat, ids] of Object.entries(KPI_CATEGORIES)) {
+    if (ids.has(kpiId)) return cat
+  }
+  return null
+}
+
+export const KPI_CATEGORY_ORDER = ['attendance', 'assessment', 'accreditation']
+export const KPI_CATEGORY_LABEL = {
+  attendance: 'Attendance',
+  assessment: 'Assessment',
+  accreditation: 'Accreditation',
+}
+
 export function getCatalogForRole(role) {
-  return KPI_CATALOG.filter(k => k.roles.includes(role))
+  return KPI_CATALOG.filter(k => k.roles.includes(role) && VISIBLE_KPI_IDS.has(k.id))
 }
