@@ -1217,6 +1217,23 @@ const TASK_FLOWS = {
   attendance: {
     triggers: ['attendance','mark attendance','mark','present','absent','task: attendance','task:attendance','haajri'],
     steps: [{ key:'grade', prompt:'Which class?', opts:['6-A','6-B','7-A','7-B','8-A','8-B'] }],
+    // Skip the "Which class?" question when the user already named the
+    // class in their message — "Mark attendance for Class 8", "8th grade",
+    // "Class 7-A", "grade 6 attendance" etc. Extracts the first plausible
+    // class label and pre-fills `ctx.grade`, so the executor jumps straight
+    // to opening the attendance canvas for that class.
+    prefill: (text) => {
+      const t = String(text || '').toLowerCase()
+      // Match "6-A", "7-B", "8a", "6 a", "class 6-a", etc.
+      let m = t.match(/\b(?:class|grade|standard|std)?\s*([1-9])\s*[-\s]?\s*([abcd])\b/i)
+      if (m) return { grade: `${m[1]}-${m[2].toUpperCase()}` }
+      // Match plain "class 8" / "8th" / "8" with intent
+      m = t.match(/\b(?:class|grade|standard|std)\s*([1-9])\b/i)
+      if (m) return { grade: `${m[1]}-A` }
+      m = t.match(/\b([1-9])(?:st|nd|rd|th)\s*(?:class|grade|std|standard)?\b/i)
+      if (m) return { grade: `${m[1]}-A` }
+      return {}
+    },
     progress: ['Fetching student roster...', 'Loading attendance records...', 'Opening attendance canvas...'],
     done: (ctx) => `📋 Opened attendance for Class ${ctx.grade || '6-B'} — tap students on the right to mark.`,
     // Open the AttendanceCanvas right-side webview instead of an inline chat
@@ -3266,25 +3283,38 @@ export default function SuperHomePage() {
     if (taskId) {
       const flow = TASK_FLOWS[taskId]
       const env = { role, profile: userProfile, district: userProfile?.district, block: userProfile?.block, cluster: userProfile?.cluster, school: userProfile?.school }
-      const initialSteps = typeof flow.steps === 'function' ? flow.steps({}, env) : flow.steps
-      if (!initialSteps || initialSteps.length === 0) {
+      // Pre-fill ctx from the original trigger text so users who type a
+      // complete request like "mark attendance for class 8" don't get asked
+      // "which class?" again. Each flow can implement its own prefill().
+      const prefillCtx = (typeof flow.prefill === 'function' ? flow.prefill(text, env) : null) || {}
+      const initialSteps = typeof flow.steps === 'function' ? flow.steps(prefillCtx, env) : flow.steps
+      // Skip any leading step whose key is already present in prefillCtx.
+      let startIdx = 0
+      while (startIdx < (initialSteps || []).length && initialSteps[startIdx].key in prefillCtx) startIdx++
+      if (!initialSteps || initialSteps.length === 0 || startIdx >= initialSteps.length) {
+        // No more questions — go straight to completion.
         if (typeof flow.customComplete === 'function') {
-          flow.customComplete({}, { ...env, addBot, openCanvas })
+          flow.customComplete(prefillCtx, { ...env, addBot, openCanvas })
+        } else if (typeof flow.openCanvasOnComplete === 'function') {
+          const ctxOut = flow.openCanvasOnComplete(prefillCtx) || {}
+          const doneText = typeof flow.done === 'function' ? flow.done(prefillCtx) : flow.done
+          addBot(doneText, [], { progress: flow.progress })
+          setTimeout(() => openCanvas({ ...ctxOut, role }), 300)
         } else if (flow.inline && flow.buildInline) {
-          const html = flow.buildInline({})
-          const doneText = typeof flow.done === 'function' ? flow.done({}) : flow.done
+          const html = flow.buildInline(prefillCtx)
+          const doneText = typeof flow.done === 'function' ? flow.done(prefillCtx) : flow.done
           addBot(doneText, [], { html, actions: flow.actions, progress: flow.progress })
-        } else {
-          const af = flow.build({})
-          const doneText = typeof flow.done === 'function' ? flow.done({}) : flow.done
+        } else if (typeof flow.build === 'function') {
+          const af = flow.build(prefillCtx)
+          const doneText = typeof flow.done === 'function' ? flow.done(prefillCtx) : flow.done
           const card = { title: af.title, icon: af.icon, subtitle: `${SCHOOL} · ${TODAY}`,
             preview: `<div style="font-size:11px;color:#666;max-height:60px;overflow:hidden">${(af.html||'').slice(0,200)}...</div>`,
             fullHtml: af.html, timestamp: Date.now() }
           addBot(doneText, [], { card, progress: flow.progress })
         }
       } else {
-        setCollect({ taskId, stepIdx: 0, ctx: {} })
-        const first = initialSteps[0]
+        setCollect({ taskId, stepIdx: startIdx, ctx: prefillCtx })
+        const first = initialSteps[startIdx]
         addBot(first.prompt, first.opts || [])
       }
       return
