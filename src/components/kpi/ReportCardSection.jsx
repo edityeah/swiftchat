@@ -1,7 +1,11 @@
 import React, { useMemo } from 'react'
 import { BarChart3 } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
-import { getComputedKpis, getCatalogForRole } from '../../kpi/kpiEngine'
+// `prioritise` is still imported because the legacy 6-tile composition kept
+// below references it. The current 3-tile-per-category render uses only
+// getComputedKpis + getCatalogForRole + the kpiCategory helper.
+// eslint-disable-next-line no-unused-vars
+import { prioritise, getComputedKpis, getCatalogForRole } from '../../kpi/kpiEngine'
 import { kpiCategory, KPI_CATEGORY_ORDER } from '../../kpi/kpiCatalog'
 import KpiTile from './KpiTile'
 
@@ -13,6 +17,33 @@ const FONT = 'Montserrat, sans-serif'
 //   3. Accreditation
 // Each tile shows the WORST-status KPI inside that category, so the user
 // sees one priority per bucket. "See all" opens the full Report Card canvas.
+//
+// ─── Legacy 6-tile composition (preserved for reference / quick revert) ───
+// Pre-May-2026 the home grid showed up to 4 worst-status (red/yellow) + 2
+// best (green) KPIs, with a 3-column × 2-row layout. The grid was filled
+// to 6 tiles even if every KPI was healthy. To restore that behaviour:
+// swap the `tiles` useMemo below with the commented block, swap the
+// className back to `grid-cols-2 md:grid-cols-3`, and re-add `prioritise`
+// to the active imports.
+//
+// const tiles = useMemo(() => {
+//   const worst = prioritise(role, profile, 4)
+//   const all = getComputedKpis(role, profile).filter(c => c.status !== 'unknown')
+//   const usedIds = new Set(worst.map(c => c.kpi.id))
+//
+//   const greens = all
+//     .filter(c => c.status === 'green' && !usedIds.has(c.kpi.id))
+//     .sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0))
+//     .slice(0, 2)
+//
+//   let result = [...worst, ...greens]
+//   if (result.length < 6) {
+//     const filled = new Set(result.map(c => c.kpi.id))
+//     const rest = all.filter(c => !filled.has(c.kpi.id)).slice(0, 6 - result.length)
+//     result = [...result, ...rest]
+//   }
+//   return result.slice(0, 6)
+// }, [role, profile])
 export default function ReportCardSection() {
   const { role, userProfile, openCanvas } = useApp()
   const profile = userProfile || {}

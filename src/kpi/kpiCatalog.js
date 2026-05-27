@@ -598,9 +598,25 @@ export const KPI_CATALOG = [
 // three buckets — Attendance, Assessment, Accreditation. Everything else
 // (Adaptive Learning A3, Admin A4, Governance A6, District-level tracking,
 // scholarship-only parent KPIs) is hidden from the role-facing surfaces.
-// The underlying KPI_CATALOG keeps the full entries for back-compat with
-// canvases that may still reference them by id, but `getCatalogForRole`
+// The underlying KPI_CATALOG above keeps the full entries for back-compat
+// with canvases that may still reference them by id, but `getCatalogForRole`
 // filters down to the visible set.
+//
+// NOTHING IS DELETED. All A3 / A4 / A6 / District / Parent-scholarship KPI
+// definitions are still in KPI_CATALOG above and the engine can still
+// compute them — they just don't appear on the home grid or the report
+// card canvas. To re-enable any of them, add the id back to VISIBLE_KPI_IDS
+// (and optionally KPI_CATEGORIES below) without touching the catalog data.
+//
+// Hidden KPI ids (still present in KPI_CATALOG, just filtered out):
+//   A3 · Adaptive Learning      — student_module_completion, tpd_hours
+//   A4 · Administration         — scheme_beneficiary_mapping, payment_completion,
+//                                  pending_payments_grievances, issue_resolution_sla,
+//                                  repeat_pending_cases
+//   A6 · Governance & AI        — (3 KPIs starting at line ~412)
+//   District-level tracking     — dropout_reduction, reenrollment_vs_target,
+//                                  samagra_shiksha_expenditure, pm_shri_performance
+//   Parent (scholarship-only)   — child_scholarship_status, child_namo_docs_pending
 const VISIBLE_KPI_IDS = new Set([
   // A1 · Attendance
   'attendance_today',
