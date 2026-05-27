@@ -3247,7 +3247,11 @@ export default function SuperHomePage() {
           // so the user sees the hand-off, then open the canvas.
           const ctxOut = flow.openCanvasOnComplete(newCtx) || {}
           const doneText = typeof flow.done === 'function' ? flow.done(newCtx) : flow.done
-          addBot(doneText, [], { progress: flow.progress })
+          // Attach a "Reopen" action — same as the single-step branch above.
+          const reopenAction = (typeof flow.reopenAction === 'function')
+            ? flow.reopenAction(newCtx, ctxOut)
+            : { label: '↗ Open again', trigger: `_reopen_canvas:${encodeURIComponent(JSON.stringify(ctxOut))}`, variant: 'primary' }
+          addBot(doneText, [], { progress: flow.progress, actions: [reopenAction] })
           setTimeout(() => openCanvas({ ...ctxOut, role }), 300)
         } else if (flow.inline && flow.buildInline) {
           const html = flow.buildInline(newCtx)
@@ -3298,7 +3302,13 @@ export default function SuperHomePage() {
         } else if (typeof flow.openCanvasOnComplete === 'function') {
           const ctxOut = flow.openCanvasOnComplete(prefillCtx) || {}
           const doneText = typeof flow.done === 'function' ? flow.done(prefillCtx) : flow.done
-          addBot(doneText, [], { progress: flow.progress })
+          // Attach a "Reopen" action so accidentally closing the canvas
+          // doesn't strand the user — they can re-open it from the bot
+          // bubble with one tap.
+          const reopenAction = (typeof flow.reopenAction === 'function')
+            ? flow.reopenAction(prefillCtx, ctxOut)
+            : { label: '↗ Open again', trigger: `_reopen_canvas:${encodeURIComponent(JSON.stringify(ctxOut))}`, variant: 'primary' }
+          addBot(doneText, [], { progress: flow.progress, actions: [reopenAction] })
           setTimeout(() => openCanvas({ ...ctxOut, role }), 300)
         } else if (flow.inline && flow.buildInline) {
           const html = flow.buildInline(prefillCtx)
@@ -3800,6 +3810,15 @@ export default function SuperHomePage() {
                       onChipClick={handleSend}
                       onCardClick={(card) => setWebview(card)}
                       onAction={(a) => {
+                        // Reopen a canvas that the user accidentally closed.
+                        // The trigger is "_reopen_canvas:<urlencoded JSON ctx>".
+                        if (typeof a.trigger === 'string' && a.trigger.startsWith('_reopen_canvas:')) {
+                          try {
+                            const payload = JSON.parse(decodeURIComponent(a.trigger.slice('_reopen_canvas:'.length)))
+                            openCanvas({ ...payload, role })
+                          } catch { /* malformed payload — silently ignore */ }
+                          return
+                        }
                         if (a.trigger === '_submit_att') {
                           addBot('✅ Attendance submitted successfully! Parent alerts queued for 5:00 PM.', [], {
                             progress: ['Saving attendance records...', 'Queuing parent SMS alerts...', 'Done!'],
